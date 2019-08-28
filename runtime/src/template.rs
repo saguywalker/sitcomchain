@@ -23,37 +23,54 @@ pub trait Trait: system::Trait {
 }
 
 pub type PubKey = H256;
-pub type CompetenceID = u32;
-pub type StudentID = u64;
+pub type CompetenceID = u32;	//start with 3 (eg. 3001)
+pub type StudentID = u64;		//start with 4 (eg. 4123)
 pub type ActivityID = u32;
 
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
-pub struct StaffAddCompetence<Timestamp>{
-	pub competence_id: CompetenceID,
+pub struct StaffAddCompetence<Hash>{
+	pub id: Hash,
 	pub student_id: StudentID,
+	pub competence_id: CompetenceID,
 	pub by: PubKey,
-	pub when: Timestamp,
+	pub semester: u16, // eg. semester 1 year 2019 => 12019
 }
 
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
-pub struct AttendedActivity<Timestamp>{
+pub struct AttendedActivity<Hash>{
+	pub id: Hash,
 	pub student_id: StudentID,
 	pub activity_id: ActivityID,
 	pub approver: PubKey,
-	pub when: Timestamp,
+}
+
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
+pub struct AutoAddCompetence<Hash>{
+	pub id: Hash,
+	pub student_id: StudentID,
+	pub competence_id: CompetenceID,
+	pub semester: u16,
 }
 
 /// This module's storage items.
 decl_storage! {
 	trait Store for Module<T: Trait> as SitcomStore {
-		// Just a dummy storage item. 
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		// Something get(something): Option<u32>;
-		CollectedCompetencies get(competencies_from): map StudentID => Option<Vec<CompetenceID>>;
-				
+		// map from Hash to struct
+		StaffAddCompetenceMap get(staff_add_competence_map): map T::Hash => StaffAddCompetence<T::Hash>;
+		AttendedActivityMap get(attended_activity_map): map T::Hash => AttendedActivity<T::Hash>;
+		AutoAddCompetenceMap get(auto_add_competence_map): map T::Hash => AutoAddCompetence<T::Hash>;
+		
+		// map from student_id to competence_id and activity_id
+		CollectedCompetencies get(competencies_from): map StudentID => Option<Vec<CompetenceID>>;		
+		AttendedActivities get(activities_from): map StudentID => Option<Vec<ActivityID>>;
+
+		// map each semester to each struct
+		StaffAddCompetenciesSemester get(staff_add_competencies_semester): map u16 => Option<Vec<StaffAddCompetence<T::Hash>>>;
+		AttendedActivitiesSemester get(attended_activities_semester): map u16 => Option<Vec<AttendedActivity<T::Hash>>>;
+		AutoAddCompetenciesSemester get(auto_add_competencies_semester): map u16 => Option<Vec<AutoAddCompetence<T::Hash>>>;
 	}
 }
 
