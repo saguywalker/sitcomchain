@@ -44,6 +44,7 @@ pub struct AttendedActivity<Hash, AccountId>{
 	pub student_id: StudentID,
 	pub activity_id: ActivityID,
 	pub approver: AccountId,
+	pub semester: u16,
 }
 
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -80,8 +81,8 @@ decl_event!(
 		<T as system::Trait>::AccountId,
 		<T as system::Trait>::Hash
 	{
-		AddCompetece(StudentID, CompetenceID, AccountId),
-		AddCompetenceFromStaff(StudentID, CompetenceID),
+		AddCompetece(StudentID, CompetenceID),
+		AddCompetenceFromStaff(StudentID, CompetenceID, AccountId),
 		ActivityApprove(StudentID, ActivityID, AccountId),
 	}
 );
@@ -99,7 +100,7 @@ decl_module! {
 			ensure!(year >= 2000 && year <= 3000, "Improper academic year");
 			let concat_semester = semester * 10000 + year;
 			
-			let random_hash = (<system::Module<T>>::random_seed(), &by, student_id, competence_id)
+			let random_hash = (<system::Module<T>>::random_seed(), &by, student_id, competence_id, concat_semester)
 				.using_encoded(<T as system::Trait>::Hashing::hash);
 
 			let new_struct = StaffAddCompetence{
@@ -107,14 +108,59 @@ decl_module! {
 				student_id: student_id,
 				competence_id: competence_id,
 				by: by.clone(),
+				semester: concat_semester,
 			};
 
 			<StaffAddCompetenceMap<T>>::insert(random_hash, new_struct);
 			<CollectedCompetencies<T>>::insert(student_id, random_hash);
 			<StaffAddCompetenciesSemester<T>>::insert(concat_semester, random_hash);
 
-			Self::deposit_event(RawEvent::AddCompetece(student_id, competence_id, by))
+			Self::deposit_event(RawEvent::AddCompetenceFromStaff(student_id, competence_id, by));
 		}
+
+		pub fn approve_activity(origin, student_id: StudentID, activity_id: ActivityID, semester: u16, year: u16){
+			let by = ensure_signed(origin)?;
+			ensure!(semester == 1 || semester == 2, "Semester should be only 1 or 2");
+			ensure!(year >= 2000 && year <= 3000, "Improper academic year");
+			let concat_semester = semester * 10000 + year;
+			
+			let random_hash = (<system::Module<T>>::random_seed(), &by, student_id, activity_id, concat_semester)
+				.using_encoded(<T as system::Trait>::Hashing::hash);
+
+			let new_struct = AttendedActivity{
+				id: random_hash,
+				student_id: student_id,
+				activity_id: activity_id,
+				by: by.clone(),
+				semester: concat_semester,
+			};
+
+			<AttendedActivityMap<T>>::insert(random_hash, new_struct);
+			<AttendedActivities<T>>::insert(student_id, random_hash);
+
+			Self::deposit_event(RawEvent::ActivityApprove(student_id, activity_id, by));
+		}
+
+	}
+}
+
+impl<T: Trait> Module<T>{
+	fn auto_add_competence(student_id: StudentID, competence_id: CompetenceID, semester: u16){
+		let random_hash = (<system::Module<T>>::random_seed(), student_id, competence_id, semester)
+			.using_encoded(<T as system::Trait>::Hashing::hash);
+
+		let new_struct = AutoAddCompetence{
+			id: random_hash,
+			student_id: student_id,
+			competence_id: competence_id,
+			semester: semester,
+		};
+
+		<AutoAddCompetenceMap<T>>::insert(random_hash, new_struct);
+		<CollectedCompetencies<T>>::insert(student_id, random_hash);
+		<AutoAddCompetenciesSemester<T>>::insert(semester, random_hash);
+
+		Self::deposit_event(RawEvent::AddCompetece(student_id, competence_id));
 	}
 }
 
