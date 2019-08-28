@@ -8,8 +8,11 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, ensure, StorageMap, StorageValue, dispatch::Result};
 use system::ensure_signed;
+use primitives::H256;
+use runtime_primitives::traits::{As, BlakeTwo256, Hash};
+use parity_codec::{Decode, Encode};
 
 /// The module's configuration trait.
 pub trait Trait: system::Trait {
@@ -19,18 +22,43 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+pub type PubKey = H256;
+pub type CompetenceID = u32;
+pub type StudentID = u64;
+pub type ActivityID = u32;
+
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
+pub struct StaffAddCompetence<Timestamp>{
+	pub competence_id: CompetenceID,
+	pub student_id: StudentID,
+	pub by: PubKey,
+	pub when: Timestamp,
+}
+
+#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
+pub struct AttendedActivity<Timestamp>{
+	pub student_id: StudentID,
+	pub activity_id: ActivityID,
+	pub approver: PubKey,
+	pub when: Timestamp,
+}
+
 /// This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as TemplateModule {
+	trait Store for Module<T: Trait> as SitcomStore {
 		// Just a dummy storage item. 
 		// Here we are declaring a StorageValue, `Something` as a Option<u32>
 		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(something): Option<u32>;
+		// Something get(something): Option<u32>;
+		CollectedCompetencies get(competencies_from): map StudentID => Option<Vec<CompetenceID>>;
+				
 	}
 }
 
 decl_module! {
-	/// The module declaration.
+	/// The module declaration.	
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Initializing events
 		// this is needed only if you are using events in your module
