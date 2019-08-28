@@ -8,10 +8,10 @@
 /// For more guidance on Substrate modules, see the example module
 /// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
 
-use support::{decl_module, decl_storage, decl_event, ensure, StorageMap, StorageValue, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, ensure, StorageMap, StorageValue, dispatch::Result, dispatch::Vec};
 use system::ensure_signed;
 //use primitives::H256;
-use runtime_primitives::traits::{As, BlakeTwo256, Hash};
+use runtime_primitives::traits::{As, Hash};
 use parity_codec::{Decode, Encode};
 
 /// The module's configuration trait.
@@ -69,17 +69,16 @@ decl_storage! {
 		AttendedActivities get(activities_from): map StudentID => Option<Vec<ActivityID>>;
 
 		// map each semester to each struct
-		StaffAddCompetenciesSemester get(staff_add_competencies_semester): map u16 => Option<Vec<StaffAddCompetence<T::Hash, T::AccountId>>>;
-		AttendedActivitiesSemester get(attended_activities_semester): map u16 => Option<Vec<AttendedActivity<T::Hash, T::AccountId>>>;
-		AutoAddCompetenciesSemester get(auto_add_competencies_semester): map u16 => Option<Vec<AutoAddCompetence<T::Hash>>>;
+		StaffAddCompetenciesSemester get(staff_add_competencies_semester): map u16 => Option<Vec<T::Hash>>;
+		AttendedActivitiesSemester get(attended_activities_semester): map u16 => Option<Vec<T::Hash>>;
+		AutoAddCompetenciesSemester get(auto_add_competencies_semester): map u16 => Option<Vec<T::Hash>>;
 	}
 }
 
 decl_event!(
 	pub enum Event<T>
 	where
-		<T as system::Trait>::AccountId,
-		<T as system::Trait>::Hash
+		<T as system::Trait>::AccountId
 	{
 		AddCompetece(StudentID, CompetenceID),
 		AddCompetenceFromStaff(StudentID, CompetenceID, AccountId),
@@ -94,7 +93,7 @@ decl_module! {
 		// this is needed only if you are using events in your module
 		fn deposit_event<T>() = default;
 		
-		pub fn staff_add_competence(origin, student_id: StudentID, competence_id: CompetenceID, semester: u16, year: u16){
+		pub fn staff_add_competence(origin, student_id: StudentID, competence_id: CompetenceID, semester: u16, year: u16) -> Result{
 			let by = ensure_signed(origin)?;
 			ensure!(semester == 1 || semester == 2, "Semester should be only 1 or 2");
 			ensure!(year >= 2000 && year <= 3000, "Improper academic year");
@@ -111,14 +110,23 @@ decl_module! {
 				semester: concat_semester,
 			};
 
+			let mut competencies_std: Vec<CompetenceID> = Self::competencies_from(student_id).unwrap_or(Vec::new());
+			competencies_std.push(competence_id);
+
+			let mut competencies_semester: Vec<T::Hash> = Self::staff_add_competencies_semester(concat_semester).unwrap_or(Vec::new());
+			competencies_semester.push(random_hash);
+
 			<StaffAddCompetenceMap<T>>::insert(random_hash, new_struct);
-			<CollectedCompetencies<T>>::insert(student_id, random_hash);
-			<StaffAddCompetenciesSemester<T>>::insert(concat_semester, random_hash);
+
+			<CollectedCompetencies<T>>::insert(student_id, competencies_std);
+			<StaffAddCompetenciesSemester<T>>::insert(concat_semester, competencies_semester);
 
 			Self::deposit_event(RawEvent::AddCompetenceFromStaff(student_id, competence_id, by));
+
+			Ok(())
 		}
 
-		pub fn approve_activity(origin, student_id: StudentID, activity_id: ActivityID, semester: u16, year: u16){
+		pub fn approve_activity(origin, student_id: StudentID, activity_id: ActivityID, semester: u16, year: u16) -> Result{
 			let by = ensure_signed(origin)?;
 			ensure!(semester == 1 || semester == 2, "Semester should be only 1 or 2");
 			ensure!(year >= 2000 && year <= 3000, "Improper academic year");
@@ -131,21 +139,31 @@ decl_module! {
 				id: random_hash,
 				student_id: student_id,
 				activity_id: activity_id,
-				by: by.clone(),
+				approver: by.clone(),
 				semester: concat_semester,
 			};
 
+			let mut activities_std: Vec<ActivityID> = Self::activities_from(student_id).unwrap_or(Vec::new());
+			activities_std.push(activity_id);
+
+			let mut activities_semester: Vec<T::Hash> = Self::attended_activities_semester(concat_semester).unwrap_or(Vec::new());
+			activities_semester.push(random_hash);
+
 			<AttendedActivityMap<T>>::insert(random_hash, new_struct);
-			<AttendedActivities<T>>::insert(student_id, random_hash);
+
+			<AttendedActivities<T>>::insert(student_id, activities_std);
+			<AttendedActivitiesSemester<T>>::insert(concat_semester, activities_semester);
 
 			Self::deposit_event(RawEvent::ActivityApprove(student_id, activity_id, by));
+
+			Ok(())
 		}
 
 	}
 }
 
 impl<T: Trait> Module<T>{
-	fn auto_add_competence(student_id: StudentID, competence_id: CompetenceID, semester: u16){
+	fn auto_add_competence(student_id: StudentID, competence_id: CompetenceID, semester: u16) -> Result{
 		let random_hash = (<system::Module<T>>::random_seed(), student_id, competence_id, semester)
 			.using_encoded(<T as system::Trait>::Hashing::hash);
 
@@ -156,11 +174,20 @@ impl<T: Trait> Module<T>{
 			semester: semester,
 		};
 
+		let mut competencies_std: Vec<CompetenceID> = Self::competencies_from(student_id).unwrap_or(Vec::new());
+		competencies_std.push(competence_id);
+
+		let mut competencies_semester: Vec<T::Hash> = Self::auto_add_competencies_semester(semester).unwrap_or(Vec::new());
+		competencies_semester.push(random_hash);
+
 		<AutoAddCompetenceMap<T>>::insert(random_hash, new_struct);
-		<CollectedCompetencies<T>>::insert(student_id, random_hash);
-		<AutoAddCompetenciesSemester<T>>::insert(semester, random_hash);
+		
+		<CollectedCompetencies<T>>::insert(student_id, competencies_std);
+		<AutoAddCompetenciesSemester<T>>::insert(semester, competencies_semester);
 
 		Self::deposit_event(RawEvent::AddCompetece(student_id, competence_id));
+
+		Ok(())
 	}
 }
 
