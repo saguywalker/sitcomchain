@@ -10,7 +10,7 @@
 
 use support::{decl_module, decl_storage, decl_event, ensure, StorageMap, StorageValue, dispatch::Result};
 use system::ensure_signed;
-use primitives::H256;
+//use primitives::H256;
 use runtime_primitives::traits::{As, BlakeTwo256, Hash};
 use parity_codec::{Decode, Encode};
 
@@ -22,28 +22,28 @@ pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-pub type PubKey = H256;
-pub type CompetenceID = u32;	//start with 3 (eg. 3001)
-pub type StudentID = u64;		//start with 4 (eg. 4123)
-pub type ActivityID = u32;
+//pub type PubKey = H256;
+pub type StudentID = u64;		
+pub type CompetenceID = u16;	//start with 3 (eg. 30001)
+pub type ActivityID = u32;		//start with 4 (4000000000 - 4999999999)
 
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
-pub struct StaffAddCompetence<Hash>{
+pub struct StaffAddCompetence<Hash, AccountId>{
 	pub id: Hash,
 	pub student_id: StudentID,
 	pub competence_id: CompetenceID,
-	pub by: PubKey,
+	pub by: AccountId,
 	pub semester: u16, // eg. semester 1 year 2019 => 12019
 }
 
 #[cfg_attr(feature = "std", derive(Debug))]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Default, Clone, Encode, Decode, Hash)]
-pub struct AttendedActivity<Hash>{
+pub struct AttendedActivity<Hash, AccountId>{
 	pub id: Hash,
 	pub student_id: StudentID,
 	pub activity_id: ActivityID,
-	pub approver: PubKey,
+	pub approver: AccountId,
 }
 
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -59,8 +59,8 @@ pub struct AutoAddCompetence<Hash>{
 decl_storage! {
 	trait Store for Module<T: Trait> as SitcomStore {
 		// map from Hash to struct
-		StaffAddCompetenceMap get(staff_add_competence_map): map T::Hash => StaffAddCompetence<T::Hash>;
-		AttendedActivityMap get(attended_activity_map): map T::Hash => AttendedActivity<T::Hash>;
+		StaffAddCompetenceMap get(staff_add_competence_map): map T::Hash => StaffAddCompetence<T::Hash, T::AccountId>;
+		AttendedActivityMap get(attended_activity_map): map T::Hash => AttendedActivity<T::Hash, T::AccountId>;
 		AutoAddCompetenceMap get(auto_add_competence_map): map T::Hash => AutoAddCompetence<T::Hash>;
 		
 		// map from student_id to competence_id and activity_id
@@ -68,11 +68,23 @@ decl_storage! {
 		AttendedActivities get(activities_from): map StudentID => Option<Vec<ActivityID>>;
 
 		// map each semester to each struct
-		StaffAddCompetenciesSemester get(staff_add_competencies_semester): map u16 => Option<Vec<StaffAddCompetence<T::Hash>>>;
-		AttendedActivitiesSemester get(attended_activities_semester): map u16 => Option<Vec<AttendedActivity<T::Hash>>>;
+		StaffAddCompetenciesSemester get(staff_add_competencies_semester): map u16 => Option<Vec<StaffAddCompetence<T::Hash, T::AccountId>>>;
+		AttendedActivitiesSemester get(attended_activities_semester): map u16 => Option<Vec<AttendedActivity<T::Hash, T::AccountId>>>;
 		AutoAddCompetenciesSemester get(auto_add_competencies_semester): map u16 => Option<Vec<AutoAddCompetence<T::Hash>>>;
 	}
 }
+
+decl_event!(
+	pub enum Event<T>
+	where
+		<T as system::Trait>::AccountId,
+		<T as system::Trait>::Hash
+	{
+		AddCompetece(StudentID, CompetenceID, AccountId),
+		AddCompetenceFromStaff(StudentID, CompetenceID),
+		ActivityApprove(StudentID, ActivityID, AccountId),
+	}
+);
 
 decl_module! {
 	/// The module declaration.	
@@ -80,33 +92,31 @@ decl_module! {
 		// Initializing events
 		// this is needed only if you are using events in your module
 		fn deposit_event<T>() = default;
+		
+		pub fn staff_add_competence(origin, student_id: StudentID, competence_id: CompetenceID, semester: u16, year: u16){
+			let by = ensure_signed(origin)?;
+			ensure!(semester == 1 || semester == 2, "Semester should be only 1 or 2");
+			ensure!(year >= 2000 && year <= 3000, "Improper academic year");
+			let concat_semester = semester * 10000 + year;
+			
+			let random_hash = (<system::Module<T>>::random_seed(), &by, student_id, competence_id)
+				.using_encoded(<T as system::Trait>::Hashing::hash);
 
-		// Just a dummy entry point.
-		// function that can be called by the external world as an extrinsics call
-		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> Result {
-			// TODO: You only need this if you want to check it was signed.
-			let who = ensure_signed(origin)?;
+			let new_struct = StaffAddCompetence{
+				id: random_hash,
+				student_id: student_id,
+				competence_id: competence_id,
+				by: by.clone(),
+			};
 
-			// TODO: Code to execute when something calls this.
-			// For example: the following line stores the passed in u32 in the storage
-			<Something<T>>::put(something);
+			<StaffAddCompetenceMap<T>>::insert(random_hash, new_struct);
+			<CollectedCompetencies<T>>::insert(student_id, random_hash);
+			<StaffAddCompetenciesSemester<T>>::insert(concat_semester, random_hash);
 
-			// here we are raising the Something event
-			Self::deposit_event(RawEvent::SomethingStored(something, who));
-			Ok(())
+			Self::deposit_event(RawEvent::AddCompetece(student_id, competence_id, by))
 		}
 	}
 }
-
-decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		// Just a dummy event.
-		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		// To emit this event, we call the deposit funtion, from our runtime funtions
-		SomethingStored(u32, AccountId),
-	}
-);
 
 /// tests for this module
 #[cfg(test)]
