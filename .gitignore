@@ -7,3 +7,4 @@
 
 Cargo.lock
 runtime/Cargo.lock
+runtime/wasm/Cargo.lock
