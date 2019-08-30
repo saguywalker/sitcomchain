@@ -71,6 +71,8 @@ func prefixKey(key []byte) []byte {
 	return append(kvPairPrefixKey, key...)
 }
 
+func 
+
 func NewSITComApplication(dbDir string) *SITComApplication {
 	name := "sitcomchain"
 	db, err := dbm.NewGoLevelDB(name, dbDir)
@@ -102,7 +104,7 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 }
 
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	if isValidatorTx(req.Tx) {
+	if isValidatorTx(req.Tx) {										// val:${pubkey}!{0 or 1}
 		return app.execValidatorTx(req.Tx)
 	}
 
@@ -117,8 +119,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 	returnCode := code.CodeTypeBadData
 
 	switch string(parts[0]) {
-	case "create_competence":
-		fmt.Println(string(parts[1]))
+	case "auto_add_competence":
 		events, err := app.CreateCompetence(parts[1])
 		if err != nil {
 			returnLog = fmt.Sprint("Error with creating competence:", err)
@@ -194,6 +195,41 @@ func (app *SITComApplication) Query(reqQuery types.RequestQuery) (resQuery types
 	switch reqQuery.Path {
 	case "/val":
 		key := []byte("val:" + string(reqQuery.Data))
+		value := app.state.db.Get(key)
+
+		resQuery.Key = reqQuery.Data
+		resQuery.Value = value
+		return
+	case "/competencies_from":
+		key := []byte("competence_from:" + string(reqQuery.Data))
+		value := app.state.db.Get(key)
+
+		resQuery.Key = reqQuery.Data
+		resQuery.Value = value
+		return
+	case "/activities_from":
+		key := []byte("activities_from:" + string(reqQuery.Data))
+		value := app.state.db.Get(key)
+
+		resQuery.Key = reqQuery.Data
+		resQuery.Value = value
+		return
+	case "/competencies_semester":
+		key := []byte("competencies_semester:" + string(reqQuery.Data))
+		value := app.state.db.Get(key)
+
+		resQuery.Key = reqQuery.Data
+		resQuery.Value = value
+		return
+	case "/activities_semester":
+		key := []byte("activities_semester:" + string(reqQuery.Data))
+		value := app.state.db.Get(key)
+
+		resQuery.Key = reqQuery.Data
+		resQuery.Value = value
+		return
+	case "/auto_competencies_semester":
+		key := []byte("auto_competencies_semester:" + string(reqQuery.Data))
 		value := app.state.db.Get(key)
 
 		resQuery.Key = reqQuery.Data
@@ -375,37 +411,27 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 
 //---------------- Tendermint ABCI ---------------------
 
-type Competence struct {
-	CompetenceID            string `json:"competence_id"`
-	CompetenceName          string `json:"competence_name"`
-	Description             string `json:"description"`
-	TotalRequiredActivities uint32 `json:"totalactivities"`
-	Creator                 string `json:"staff_id"`
-}
-
 type StaffAddCompetence struct {
-	CompetenceID string `json:"competence_id"`
-	StudentID    string `json:"student_id"`
-	StaffID      string `json:"staff_id"`
-}
-
-type Student struct {
-	StudentID   string `json:"student_id"`
-	StudentName string `json:"student_name"`
-}
-
-type Staff struct {
-	StaffID     string `json:"staff_id"`
-	StaffName   string `json:"staff_name"`
-	StaffPubkey string `json:"staff_pubkey"`
+	StudentID    	uint64 `json:"student_id"`
+	CompetenceID    uint16 `json:"competence_id"`
+	By				[]byte `json:"by"`
+	Semester		uint16 `json:"semester"`
 }
 
 type AttendedActivity struct {
-	StudentID  string `json:"student_id"`
-	ActivityID string `json:"activity_id"`
-	Approver   string `json:"staff_id"`
+	StudentID 	uint64 `json:"student_id"`
+	ActivityID 	uint32 `json:"activity_id"`
+	Approver	[]byte `json:"approver"`
+	Semester	uint16 `json:"semester"`
 }
 
+type AutoAddComptence struct{
+	StudentID    	uint64 `json:"student_id"`
+	CompetenceID    uint16 `json:"competence_id"`
+	Semester		uint16 `json:"semester"`
+} 
+
+/*
 func (app *SITComApplication) CreateCompetence(args []byte) ([]types.Event, error) {
 	var competence Competence
 	err := json.Unmarshal(args, &competence)
@@ -439,7 +465,7 @@ func (app *SITComApplication) CreateCompetence(args []byte) ([]types.Event, erro
 	return events, nil
 
 }
-
+*/
 func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, error) {
 	var update StaffAddCompetence
 	err := json.Unmarshal(args, &update)
@@ -447,15 +473,28 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 		return nil, err
 	}
 
-	key := append([]byte(update.StudentID), []byte(update.CompetenceID)...)
-	var value []byte
-
+	//key := append([]byte(update.StudentID), []byte(update.CompetenceID)...)
+	//var value []byte
+	/*
 	value = append([]byte(update.StudentID), ';')
 	value = append(value, update.CompetenceID...)
 	value = append(value, ';')
 	value = append(value, update.StaffID...)
+	*/
 
-	app.state.db.Set(key, value)
+	value := new(bytes.Buffer)
+	binary.Write(value, binary.BigEndian, update.StudentID)
+	binary.Write(value, binary.BigEndian, update.CompetenceID)
+	binary.Write(value, binary.BigEndian, update.By)
+	binary.Write(value, binary.BigEndian, update.Semester)
+
+	key := crypto.Sha256(value.Bytes())
+
+	app.state.db.Set(key, value)						//Set struct_id to value
+	
+
+	app.updateCompetencies(update.StudentID, value)
+
 	app.state.Size++
 
 	events := []types.Event{
@@ -464,7 +503,7 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 			Attributes: []cmn.KVPair{
 				{Key: []byte("competenceid"), Value: []byte(update.CompetenceID)},
 				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
-				{Key: []byte("staffid"), Value: []byte(update.StaffID)},
+				{Key: []byte("by"), Value: []byte(update.By)},
 			},
 		},
 	}
