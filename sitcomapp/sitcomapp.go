@@ -473,27 +473,17 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 		return nil, err
 	}
 
-	//key := append([]byte(update.StudentID), []byte(update.CompetenceID)...)
-	//var value []byte
-	/*
-	value = append([]byte(update.StudentID), ';')
-	value = append(value, update.CompetenceID...)
-	value = append(value, ';')
-	value = append(value, update.StaffID...)
-	*/
+	value := make([]byte, 20)							// 8 + 2 + 2 + 8 (StudentID + CompetenceID + Semester + state.Size)
 
-	value := new(bytes.Buffer)
-	binary.Write(value, binary.BigEndian, update.StudentID)
-	binary.Write(value, binary.BigEndian, update.CompetenceID)
-	binary.Write(value, binary.BigEndian, update.By)
-	binary.Write(value, binary.BigEndian, update.Semester)
+	binary.LittleEndian.PutUint64(value, update.StudentID)
+	binary.LittleEndian.PutUint16(value, update.CompetenceID)
+	value := append(value, update.By...)
+	binary.LittleEndian.PutUint16(value, update.Semester)
+	binary.LittleEndian.PutUint64(value, app.state.Size + 1)
 
-	key := crypto.Sha256(value.Bytes())
+	key := crypto.Sha256(value)
 
-	app.state.db.Set(key, value)						//Set struct_id to value
-	
-
-	app.updateCompetencies(update.StudentID, value)
+	app.state.db.Set(key, value)					//Set struct_id to value, without last 8 bytes (state.Size)
 
 	app.state.Size++
 
@@ -501,9 +491,11 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 		{
 			Type: "competence.add",
 			Attributes: []cmn.KVPair{
-				{Key: []byte("competenceid"), Value: []byte(update.CompetenceID)},
-				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
-				{Key: []byte("by"), Value: []byte(update.By)},
+				{Key: []byte("txid"), Value: key},
+				{Key: []byte("studentid"), Value: []byte(strconv.Itoa(update.StudentID))},
+				{Key: []byte("competenceid"), Value: []byte(strconv.Itoa(update.StudentID))},
+				{Key: []byte("by"), Value: update.By},
+				{Key: []byte("semester"), Value: []byte(strconv.Itoa(update.Semester))},
 			},
 		},
 	}
