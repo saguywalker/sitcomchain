@@ -1,7 +1,7 @@
 package main
 
 import (
-	"gitlab.com/sit-competence/sitcomchain/sitcomapp"
+	"github.com/saguywalker/sitcomchain/sitcomapp"
 	"os"
 
 	"github.com/tendermint/tendermint/abci/server"

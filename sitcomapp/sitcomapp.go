@@ -2,46 +2,42 @@ package sitcomapp
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/saguywalker/sitcomchain/code"
-	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/version"
-	tmtypes "github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/crypto/ed25519"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/log"
+	tmtypes "github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/version"
 	dbm "github.com/tendermint/tm-db"
-)
-
-const (
-	ValidatorSetChangePrefix string = "val:"
 )
 
 var (
 	_               types.Application = (*SITComApplication)(nil)
-	stateKey                          = []byte("stateKey")
-	kvPairPrefixKey                   = []byte("kvPairKey:")
 	ProtocolVersion version.Protocol  = 0x1
+	stateKey        []byte            = []byte("stateKey:")
 )
 
 type SITComApplication struct {
 	types.BaseApplication
 
-	state      State
-	ValUpdates []types.ValidatorUpdate
+	state              State
+	ValUpdates         []types.ValidatorUpdate
 	valAddrToPubKeyMap map[string]types.PubKey
-	logger     log.Logger
+	logger             log.Logger
 }
 
 type State struct {
 	db      dbm.DB
-	Size    int64  `json:"size"`
+	Size    uint64 `json:"size"`
 	Height  int64  `json:"height"`
 	AppHash []byte `json:"app_hash"`
 }
@@ -67,12 +63,6 @@ func saveState(state State) {
 	state.db.Set(stateKey, stateBytes)
 }
 
-func prefixKey(key []byte) []byte {
-	return append(kvPairPrefixKey, key...)
-}
-
-func 
-
 func NewSITComApplication(dbDir string) *SITComApplication {
 	name := "sitcomchain"
 	db, err := dbm.NewGoLevelDB(name, dbDir)
@@ -83,9 +73,9 @@ func NewSITComApplication(dbDir string) *SITComApplication {
 	state := loadState(db)
 
 	return &SITComApplication{
-		state:  state,
+		state:              state,
 		valAddrToPubKeyMap: make(map[string]types.PubKey),
-		logger: log.NewNopLogger()}
+		logger:             log.NewNopLogger()}
 }
 
 func (app *SITComApplication) SetLogger(l log.Logger) {
@@ -107,7 +97,7 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 // "add_competence=\{\"student_id\":\"59130500211\",\"competence_id\":\"30001\",\"by\":\"$publickey\",\"semester\":"12019"\}"'
 // "approve_activity=\{\"student_id\":\"59130500211\",\"activity_id\":\"4999999999\",\"approver\":\"$publickey\",\"semester\":\"12019\"\}"'
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	if isValidatorTx(req.Tx) {										
+	if isValidatorTx(req.Tx) {
 		return app.execValidatorTx(req.Tx)
 	}
 
@@ -147,46 +137,36 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
 }
 
-
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
 func (app *SITComApplication) Commit() types.ResponseCommit {
 	appHash := make([]byte, 8)
-	binary.PutVarint(appHash, app.state.Size)
+	binary.LittleEndian.PutUint64(appHash, app.state.Size)
 	app.state.AppHash = appHash
 	app.state.Height++
 	saveState(app.state)
 	return types.ResponseCommit{Data: appHash}
 }
 
-/*
 func (app *SITComApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
-	if len(req.Data) == 0{
-    //str, _ := app.state.db.db.GetProperty("leveldb.stats")
-    //fmt.Printf("%v\n", str)
-    iter := app.state.db.Iterator(nil, nil)
-	  for ; iter.Valid(); iter.Next() {
-		  key := iter.Key()
-		  value := iter.Value()
-		  fmt.Println("key:", string(key))
-		  fmt.Println("value:", string(value))
-		  fmt.Println("************************************")
-	  }
-  }else{
-    res.Key = req.Data
-	  value := app.state.db.Get(req.Data)
-	  res.Value = value
-	  if value != nil {
-		  res.Log = "exists"
-	  } else {
-		  res.Log = "does not exist"
-	  }
-  }
+	if len(req.Data) == 0 {
+		app.state.db.Print()
+	} else {
+		res.Key = req.Data
+		value := app.state.db.Get(req.Data)
+		res.Value = value
+		if value != nil {
+			res.Log = "exists"
+		} else {
+			res.Log = "does not exist"
+		}
+	}
 	return
 }
-*/
+
+/*
 func (app *SITComApplication) Query(reqQuery types.RequestQuery) (resQuery types.ResponseQuery) {
 	switch reqQuery.Path {
 	case "/val":
@@ -232,8 +212,10 @@ func (app *SITComApplication) Query(reqQuery types.RequestQuery) (resQuery types
 		resQuery.Value = value
 		return
 	default:
+		key := []byte(fmt.Sprintf("kvPairKey:", string(reqQuery.Data)))
+		value := app.state.db.Get(key)
+
 		resQuery.Key = reqQuery.Data
-		value := app.state.db.Get(prefixKey(reqQuery.Data))
 		resQuery.Value = value
 		if value != nil {
 			resQuery.Log = "exists"
@@ -243,7 +225,7 @@ func (app *SITComApplication) Query(reqQuery types.RequestQuery) (resQuery types
 		return
 	}
 }
-
+*/
 func (app *SITComApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	for _, v := range req.Validators {
 		r := app.updateValidator(v)
@@ -300,11 +282,11 @@ func MakeValSetChangeTx(pubkey types.PubKey, power int64) []byte {
 }
 
 func isValidatorTx(tx []byte) bool {
-	return strings.HasPrefix(string(tx), ValidatorSetChangePrefix)
+	return strings.HasPrefix(string(tx), "val:")
 }
 
 func (app *SITComApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx {
-	tx = tx[len(ValidatorSetChangePrefix):]
+	tx = tx[len("val:"):]
 
 	//get the pubkey and power
 	pubKeyAndPower := strings.Split(string(tx), "!")
@@ -343,34 +325,6 @@ func (app *SITComApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx
 	return hexValue
 }*/
 
-func (app *SITComApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx {
-	tx = tx[len(ValidatorSetChangePrefix):]
-
-	pubKeyAndPower := strings.Split(string(tx), "/")
-	if len(pubKeyAndPower) != 2 {
-		return types.ResponseDeliverTx{
-			Code: code.CodeTypeEncodingError,
-			Log:  fmt.Sprintf("Expected 'pubkey/power'. Got %v", pubKeyAndPower)}
-	}
-	pubkeyS, powerS := pubKeyAndPower[0], pubKeyAndPower[1]
-
-	pubKey, err := hex.DecodeString(pubkeyS)
-	if err != nil {
-		return types.ResponseDeliverTx{
-			Code: code.CodeTypeEncodingError,
-			Log:  fmt.Sprintf("Pubkey (%s) is invalid hex", pubkeyS)}
-	}
-
-	power, err := strconv.ParseInt(powerS, 10, 64)
-	if err != nil {
-		return types.ResponseDeliverTx{
-			Code: code.CodeTypeEncodingError,
-			Log:  fmt.Sprintf("Power (%s) is not an int", powerS)}
-	}
-
-	return app.updateValidator(types.Ed25519ValidatorUpdate(pubKey, int64(power)))
-}
-
 func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.ResponseDeliverTx {
 	key := []byte("val:" + string(v.PubKey.Data))
 
@@ -408,17 +362,17 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 //---------------- Tendermint ABCI ---------------------
 
 type StaffAddCompetence struct {
-	StudentID    	[]byte `json:"student_id"`
-	CompetenceID    []byte `json:"competence_id"`
-	By				[]byte `json:"by"`
-	Semester		[]byte `json:"semester"`
+	StudentID    []byte `json:"student_id"`
+	CompetenceID []byte `json:"competence_id"`
+	By           []byte `json:"by"`
+	Semester     []byte `json:"semester"`
 }
 
 type AttendedActivity struct {
-	StudentID 	[]byte `json:"student_id"`
-	ActivityID 	[]byte `json:"activity_id"`
-	Approver	[]byte `json:"approver"`
-	Semester	[]byte `json:"semester"`
+	StudentID  []byte `json:"student_id"`
+	ActivityID []byte `json:"activity_id"`
+	Approver   []byte `json:"approver"`
+	Semester   []byte `json:"semester"`
 }
 
 func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, error) {
@@ -428,9 +382,9 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 		return nil, err
 	}
 
-	value := make([]byte, 8)							
+	value := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(value, app.state.Size + 1)
+	binary.LittleEndian.PutUint64(value, app.state.Size+1)
 	value = append(value, update.StudentID...)
 	value = append(value, update.CompetenceID...)
 	value = append(value, update.By...)
@@ -439,7 +393,7 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 	key := crypto.Sha256(value)
 
 	//Set struct_id to value
-	app.state.db.Set(key, value)					
+	app.state.db.Set(key, value)
 	app.state.Size++
 
 	events := []types.Event{
@@ -465,19 +419,18 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 		return nil, err
 	}
 
-	value := make([]byte, 8)						
+	value := make([]byte, 8)
 
-	binary.LittleEndian.PutUint64(value, app.state.Size + 1)
+	binary.LittleEndian.PutUint64(value, app.state.Size+1)
 	value = append(value, update.StudentID...)
 	value = append(value, update.ActivityID...)
-	value = append(value, update.By...)
+	value = append(value, update.Approver...)
 	value = append(value, update.Semester...)
 
 	key := crypto.Sha256(value)
 
-	app.state.db.Set(key, value)					
+	app.state.db.Set(key, value)
 	app.state.Size++
-
 
 	events := []types.Event{
 		{
@@ -486,7 +439,7 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 				{Key: []byte("txid"), Value: key},
 				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
 				{Key: []byte("activityid"), Value: []byte(update.ActivityID)},
-				{Key: []byte("by"), Value: update.By},
+				{Key: []byte("by"), Value: update.Approver},
 				{Key: []byte("semester"), Value: []byte(update.Semester)},
 			},
 		},
@@ -494,18 +447,3 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 
 	return events, nil
 }
-
-/*
-func (goDb dbm.DB) printAll(){
-  str, _ := goDb.db.NewGetProperty("leveldb.stats")
-  fmt.Printf("%v\n", str)
-
-  itr := goDb.db.NewIterator(nil,nil)
-  for itr.Next(){
-    key := itr.Key()
-    value := itr.Value()
-    fmt.Printf("[%s]:\t[%s]\n",string(key),string(value))
-  }
-}
-*/
-
