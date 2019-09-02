@@ -90,6 +90,7 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 	}
 	res.LastBlockHeight = app.state.Height
 	res.LastBlockAppHash = app.state.AppHash
+	fmt.Printf("%+v\n", res)
 	return res
 }
 
@@ -97,23 +98,36 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 // "add_competence=\{\"student_id\":\"59130500211\",\"competence_id\":\"30001\",\"by\":\"$publickey\",\"semester\":"12019"\}"'
 // "approve_activity=\{\"student_id\":\"59130500211\",\"activity_id\":\"4999999999\",\"approver\":\"$publickey\",\"semester\":\"12019\"\}"'
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
+	fmt.Println("In DeliverTx")
+	
 	if isValidatorTx(req.Tx) {
 		return app.execValidatorTx(req.Tx)
 	}
 
-	parts := bytes.Split(req.Tx, []byte("="))
-
-	if len(parts) != 2 {
-		return types.ResponseDeliverTx{Code: code.CodeTypeBadData}
+	var temp interface{}
+	fmt.Println(temp.(string))
+	err := json.Unmarshal(req.Tx, &temp)
+	if err != nil {
+		panic(err)
 	}
+
+	message := temp.(map[string]interface{})
+	fmt.Printf("Message: %+v", message)
+	var bodyTemp interface{}
+	err = json.Unmarshal([]byte(message["body"].(string)), &bodyTemp)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Body: %+v", bodyTemp)
 
 	returnLog := ""
 	var returnEvents []types.Event
 	returnCode := code.CodeTypeBadData
 
-	switch string(parts[0]) {
+	switch message["type"] {
 	case "add_competence":
-		events, err := app.StaffAddCompetence(parts[1])
+		events, err := app.StaffAddCompetence(bodyTemp.([]byte))
 		if err != nil {
 			returnLog = fmt.Sprint("Error with adding competence:", err)
 		} else {
@@ -122,7 +136,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 		}
 		break
 	case "approve_activity":
-		events, err := app.AttendedActivity(parts[1])
+		events, err := app.AttendedActivity(bodyTemp.([]byte))
 		if err != nil {
 			returnLog = fmt.Sprint("Error with updating attended activity:", err)
 		} else {
@@ -131,13 +145,14 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 		}
 		break
 	default:
-		returnLog = fmt.Sprintf("Unknown function '%s'", parts[0])
+		returnLog = fmt.Sprintf("Unknown function '%s'", message["type"].(string))
 	}
 
 	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
 }
 
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	fmt.Printf("CheckTx: %+v", string(req.Tx))
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
@@ -166,66 +181,6 @@ func (app *SITComApplication) Query(req types.RequestQuery) (res types.ResponseQ
 	return
 }
 
-/*
-func (app *SITComApplication) Query(reqQuery types.RequestQuery) (resQuery types.ResponseQuery) {
-	switch reqQuery.Path {
-	case "/val":
-		key := []byte("val:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	case "/competencies_from":
-		key := []byte("competence_from:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	case "/activities_from":
-		key := []byte("activities_from:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	case "/competencies_semester":
-		key := []byte("competencies_semester:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	case "/activities_semester":
-		key := []byte("activities_semester:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	case "/auto_competencies_semester":
-		key := []byte("auto_competencies_semester:" + string(reqQuery.Data))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		return
-	default:
-		key := []byte(fmt.Sprintf("kvPairKey:", string(reqQuery.Data)))
-		value := app.state.db.Get(key)
-
-		resQuery.Key = reqQuery.Data
-		resQuery.Value = value
-		if value != nil {
-			resQuery.Log = "exists"
-		} else {
-			resQuery.Log = "does not exist"
-		}
-		return
-	}
-}
-*/
 func (app *SITComApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	for _, v := range req.Validators {
 		r := app.updateValidator(v)
@@ -362,33 +317,37 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 //---------------- Tendermint ABCI ---------------------
 
 type StaffAddCompetence struct {
-	StudentID    []byte `json:"student_id"`
-	CompetenceID []byte `json:"competence_id"`
-	By           []byte `json:"by"`
-	Semester     []byte `json:"semester"`
+	StudentID    string `json:"student_id"`
+	CompetenceID string `json:"competence_id"`
+	By           string `json:"by"`
+	Semester     uint16 `json:"semester"`
+	Nonce        uint64 `json:"nonce"`
 }
 
 type AttendedActivity struct {
-	StudentID  []byte `json:"student_id"`
-	ActivityID []byte `json:"activity_id"`
+	StudentID  string `json:"student_id"`
+	ActivityID string `json:"activity_id"`
 	Approver   []byte `json:"approver"`
-	Semester   []byte `json:"semester"`
+	Semester   uint16 `json:"semester"`
+	Nonce      uint64 `json:"nonce"`
 }
 
-func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, error) {
+func (app *SITComApplication) StaffAddCompetence(body []byte) ([]types.Event, error) {
 	var update StaffAddCompetence
-	err := json.Unmarshal(args, &update)
+	err := json.Unmarshal(body, &update)
 	if err != nil {
 		return nil, err
 	}
 
-	value := make([]byte, 8)
+	update.Nonce = app.state.Size + 1
 
-	binary.LittleEndian.PutUint64(value, app.state.Size+1)
-	value = append(value, update.StudentID...)
-	value = append(value, update.CompetenceID...)
-	value = append(value, update.By...)
-	value = append(value, update.Semester...)
+	value, err := json.Marshal(update)
+	if err != nil {
+		return nil, err
+	}
+
+	semester := make([]byte, 2)
+	binary.LittleEndian.PutUint16(semester, update.Semester)
 
 	key := crypto.Sha256(value)
 
@@ -403,8 +362,8 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 				{Key: []byte("txid"), Value: key},
 				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
 				{Key: []byte("competenceid"), Value: []byte(update.CompetenceID)},
-				{Key: []byte("by"), Value: update.By},
-				{Key: []byte("semester"), Value: []byte(update.Semester)},
+				{Key: []byte("by"), Value: []byte(update.By)},
+				{Key: []byte("semester"), Value: semester},
 			},
 		},
 	}
@@ -412,20 +371,22 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 	return events, nil
 }
 
-func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, error) {
+func (app *SITComApplication) AttendedActivity(body []byte) ([]types.Event, error) {
 	var update AttendedActivity
-	err := json.Unmarshal(args, &update)
+	err := json.Unmarshal(body, &update)
 	if err != nil {
 		return nil, err
 	}
 
-	value := make([]byte, 8)
+	update.Nonce = app.state.Size + 1
 
-	binary.LittleEndian.PutUint64(value, app.state.Size+1)
-	value = append(value, update.StudentID...)
-	value = append(value, update.ActivityID...)
-	value = append(value, update.Approver...)
-	value = append(value, update.Semester...)
+	value, err := json.Marshal(update)
+	if err != nil {
+		return nil, err
+	}
+
+	semester := make([]byte, 2)
+	binary.LittleEndian.PutUint16(semester, update.Semester)
 
 	key := crypto.Sha256(value)
 
@@ -440,7 +401,7 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
 				{Key: []byte("activityid"), Value: []byte(update.ActivityID)},
 				{Key: []byte("by"), Value: update.Approver},
-				{Key: []byte("semester"), Value: []byte(update.Semester)},
+				{Key: []byte("semester"), Value: semester},
 			},
 		},
 	}
