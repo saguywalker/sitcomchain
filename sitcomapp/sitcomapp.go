@@ -103,8 +103,11 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 	return res
 }
 
+// val:${pubkey}!{0 or 1} => update validator
+// "add_competence=\{\"student_id\":\"59130500211\",\"competence_id\":\"30001\",\"by\":\"$publickey\",\"semester\":"12019"\}"'
+// "approve_activity=\{\"student_id\":\"59130500211\",\"activity_id\":\"4999999999\",\"approver\":\"$publickey\",\"semester\":\"12019\"\}"'
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	if isValidatorTx(req.Tx) {										// val:${pubkey}!{0 or 1}
+	if isValidatorTx(req.Tx) {										
 		return app.execValidatorTx(req.Tx)
 	}
 
@@ -119,16 +122,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 	returnCode := code.CodeTypeBadData
 
 	switch string(parts[0]) {
-	case "auto_add_competence":
-		events, err := app.CreateCompetence(parts[1])
-		if err != nil {
-			returnLog = fmt.Sprint("Error with creating competence:", err)
-		} else {
-			returnCode = code.CodeTypeOK
-			returnEvents = events
-		}
-		break
-	case "staff_add_competence":
+	case "add_competence":
 		events, err := app.StaffAddCompetence(parts[1])
 		if err != nil {
 			returnLog = fmt.Sprint("Error with adding competence:", err)
@@ -137,7 +131,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 			returnEvents = events
 		}
 		break
-	case "attended_activity":
+	case "approve_activity":
 		events, err := app.AttendedActivity(parts[1])
 		if err != nil {
 			returnLog = fmt.Sprint("Error with updating attended activity:", err)
@@ -146,6 +140,8 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 			returnEvents = events
 		}
 		break
+	default:
+		returnLog = fmt.Sprintf("Unknown function '%s'", parts[0])
 	}
 
 	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
@@ -412,60 +408,19 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 //---------------- Tendermint ABCI ---------------------
 
 type StaffAddCompetence struct {
-	StudentID    	uint64 `json:"student_id"`
-	CompetenceID    uint16 `json:"competence_id"`
+	StudentID    	[]byte `json:"student_id"`
+	CompetenceID    []byte `json:"competence_id"`
 	By				[]byte `json:"by"`
-	Semester		uint16 `json:"semester"`
+	Semester		[]byte `json:"semester"`
 }
 
 type AttendedActivity struct {
-	StudentID 	uint64 `json:"student_id"`
-	ActivityID 	uint32 `json:"activity_id"`
+	StudentID 	[]byte `json:"student_id"`
+	ActivityID 	[]byte `json:"activity_id"`
 	Approver	[]byte `json:"approver"`
-	Semester	uint16 `json:"semester"`
+	Semester	[]byte `json:"semester"`
 }
 
-type AutoAddComptence struct{
-	StudentID    	uint64 `json:"student_id"`
-	CompetenceID    uint16 `json:"competence_id"`
-	Semester		uint16 `json:"semester"`
-} 
-
-/*
-func (app *SITComApplication) CreateCompetence(args []byte) ([]types.Event, error) {
-	var competence Competence
-	err := json.Unmarshal(args, &competence)
-	if err != nil {
-		return nil, err
-	}
-
-	key := competence.CompetenceID
-	var value []byte
-
-	value = append([]byte(competence.CompetenceName), ';')
-	value = append(value, competence.Description...)
-	value = append(value, ';')
-	value = append(value, strconv.FormatInt(int64(competence.TotalRequiredActivities), 10)...)
-	value = append(value, ';')
-	value = append(value, competence.Creator...)
-
-	app.state.db.Set([]byte(key), value)
-	app.state.Size++
-
-	events := []types.Event{
-		{
-			Type: "competence.creation",
-			Attributes: []cmn.KVPair{
-				{Key: []byte("competenceid"), Value: []byte(competence.CompetenceID)},
-				{Key: []byte("staffid"), Value: []byte(competence.Creator)},
-			},
-		},
-	}
-
-	return events, nil
-
-}
-*/
 func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, error) {
 	var update StaffAddCompetence
 	err := json.Unmarshal(args, &update)
@@ -473,18 +428,18 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 		return nil, err
 	}
 
-	value := make([]byte, 20)							// 8 + 2 + 2 + 8 (StudentID + CompetenceID + Semester + state.Size)
+	value := make([]byte, 8)							
 
-	binary.LittleEndian.PutUint64(value, update.StudentID)
-	binary.LittleEndian.PutUint16(value, update.CompetenceID)
-	value := append(value, update.By...)
-	binary.LittleEndian.PutUint16(value, update.Semester)
 	binary.LittleEndian.PutUint64(value, app.state.Size + 1)
+	value = append(value, update.StudentID...)
+	value = append(value, update.CompetenceID...)
+	value = append(value, update.By...)
+	value = append(value, update.Semester...)
 
 	key := crypto.Sha256(value)
 
-	app.state.db.Set(key, value)					//Set struct_id to value
-
+	//Set struct_id to value
+	app.state.db.Set(key, value)					
 	app.state.Size++
 
 	events := []types.Event{
@@ -492,10 +447,10 @@ func (app *SITComApplication) StaffAddCompetence(args []byte) ([]types.Event, er
 			Type: "competence.add",
 			Attributes: []cmn.KVPair{
 				{Key: []byte("txid"), Value: key},
-				{Key: []byte("studentid"), Value: []byte(strconv.Itoa(update.StudentID))},
-				{Key: []byte("competenceid"), Value: []byte(strconv.Itoa(update.StudentID))},
+				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
+				{Key: []byte("competenceid"), Value: []byte(update.CompetenceID)},
 				{Key: []byte("by"), Value: update.By},
-				{Key: []byte("semester"), Value: []byte(strconv.Itoa(update.Semester))},
+				{Key: []byte("semester"), Value: []byte(update.Semester)},
 			},
 		},
 	}
@@ -510,18 +465,17 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 		return nil, err
 	}
 
-	value := make([]byte, 22)							// 8 + 4 + 2 + 8 (StudentID + Activity + Semester + state.Size)
+	value := make([]byte, 8)						
 
-	binary.LittleEndian.PutUint64(value, update.StudentID)
-	binary.LittleEndian.PutUint16(value, update.ActivityID)
-	value := append(value, update.Approver...)
-	binary.LittleEndian.PutUint16(value, update.Semester)
 	binary.LittleEndian.PutUint64(value, app.state.Size + 1)
+	value = append(value, update.StudentID...)
+	value = append(value, update.ActivityID...)
+	value = append(value, update.By...)
+	value = append(value, update.Semester...)
 
 	key := crypto.Sha256(value)
 
-	app.state.db.Set(key, value)					//Set struct_id to value
-
+	app.state.db.Set(key, value)					
 	app.state.Size++
 
 
@@ -530,10 +484,10 @@ func (app *SITComApplication) AttendedActivity(args []byte) ([]types.Event, erro
 			Type: "activity.approve",
 			Attributes: []cmn.KVPair{
 				{Key: []byte("txid"), Value: key},
-				{Key: []byte("studentid"), Value: []byte(strconv.Itoa(update.StudentID))},
-				{Key: []byte("activityid"), Value: []byte(strconv.Itoa(update.ActivityID))},
+				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
+				{Key: []byte("activityid"), Value: []byte(update.ActivityID)},
 				{Key: []byte("by"), Value: update.By},
-				{Key: []byte("semester"), Value: []byte(strconv.Itoa(update.Semester))},
+				{Key: []byte("semester"), Value: []byte(update.Semester)},
 			},
 		},
 	}
