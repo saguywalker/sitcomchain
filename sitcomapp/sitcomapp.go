@@ -104,30 +104,19 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 		return app.execValidatorTx(req.Tx)
 	}
 
-	var temp interface{}
-	fmt.Println(temp.(string))
-	err := json.Unmarshal(req.Tx, &temp)
-	if err != nil {
-		panic(err)
-	}
+	parts := bytes.Split(req.Tx, []byte("="))
 
-	message := temp.(map[string]interface{})
-	fmt.Printf("Message: %+v", message)
-	var bodyTemp interface{}
-	err = json.Unmarshal([]byte(message["body"].(string)), &bodyTemp)
-	if err != nil {
-		panic(err)
+	if len(parts) != 2 {
+		return types.ResponseDeliverTx{Code: code.CodeTypeBadData}
 	}
-
-	fmt.Printf("Body: %+v", bodyTemp)
 
 	returnLog := ""
 	var returnEvents []types.Event
 	returnCode := code.CodeTypeBadData
 
-	switch message["type"] {
+	switch string(parts[0]) {
 	case "add_competence":
-		events, err := app.StaffAddCompetence(bodyTemp.([]byte))
+		events, err := app.StaffAddCompetence(parts[1])
 		if err != nil {
 			returnLog = fmt.Sprint("Error with adding competence:", err)
 		} else {
@@ -136,7 +125,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 		}
 		break
 	case "approve_activity":
-		events, err := app.AttendedActivity(bodyTemp.([]byte))
+		events, err := app.AttendedActivity(parts[1])
 		if err != nil {
 			returnLog = fmt.Sprint("Error with updating attended activity:", err)
 		} else {
@@ -145,14 +134,14 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 		}
 		break
 	default:
-		returnLog = fmt.Sprintf("Unknown function '%s'", message["type"].(string))
+		returnLog = fmt.Sprintf("Unknown function '%s'", parts[1])
 	}
 
 	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
 }
 
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	fmt.Printf("CheckTx: %+v", string(req.Tx))
+	fmt.Printf("CheckTx: %+v\n", string(req.Tx))
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
