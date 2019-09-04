@@ -22,10 +22,11 @@ import (
 
 var (
 	_               types.Application = (*SITComApplication)(nil)
-	ProtocolVersion version.Protocol  = 0x1
-	stateKey        []byte            = []byte("stateKey:")
+	protocolVersion version.Protocol  = 0x1
+	stateKey                          = []byte("stateKey:")
 )
 
+// SITComApplication defines an application struct
 type SITComApplication struct {
 	types.BaseApplication
 
@@ -35,6 +36,7 @@ type SITComApplication struct {
 	logger             log.Logger
 }
 
+// State defines a struct which contain the current status right now
 type State struct {
 	db      dbm.DB
 	Size    uint64 `json:"size"`
@@ -63,6 +65,7 @@ func saveState(state State) {
 	state.db.Set(stateKey, stateBytes)
 }
 
+// NewSITComApplication returns new SITComApplication struct
 func NewSITComApplication(dbDir string) *SITComApplication {
 	name := "sitcomchain"
 	db, err := dbm.NewGoLevelDB(name, dbDir)
@@ -78,15 +81,17 @@ func NewSITComApplication(dbDir string) *SITComApplication {
 		logger:             log.NewNopLogger()}
 }
 
+// SetLogger sets a logger from log.Logger
 func (app *SITComApplication) SetLogger(l log.Logger) {
 	app.logger = l
 }
 
+// Info set an information of blockchain
 func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 	res := types.ResponseInfo{
 		Data:       fmt.Sprintf("{\"size\":%v}", app.state.Size),
 		Version:    version.ABCIVersion,
-		AppVersion: ProtocolVersion.Uint64(),
+		AppVersion: protocolVersion.Uint64(),
 	}
 	res.LastBlockHeight = app.state.Height
 	res.LastBlockAppHash = app.state.AppHash
@@ -94,12 +99,13 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 	return res
 }
 
+// DeliverTx updates new data into blockchain
 // val:${pubkey}!{0 or 1} => update validator
 // "add_competence=\{\"student_id\":\"59130500211\",\"competence_id\":\"30001\",\"by\":\"$publickey\",\"semester\":"12019"\}"'
 // "approve_activity=\{\"student_id\":\"59130500211\",\"activity_id\":\"4999999999\",\"approver\":\"$publickey\",\"semester\":\"12019\"\}"'
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
 	fmt.Println("In DeliverTx")
-	
+
 	if isValidatorTx(req.Tx) {
 		return app.execValidatorTx(req.Tx)
 	}
@@ -140,11 +146,13 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
 }
 
+// CheckTx validates the tx payload
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	fmt.Printf("CheckTx: %+v\n", string(req.Tx))
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
+// Commit updates new current state into blockchain
 func (app *SITComApplication) Commit() types.ResponseCommit {
 	appHash := make([]byte, 8)
 	binary.LittleEndian.PutUint64(appHash, app.state.Size)
@@ -154,6 +162,7 @@ func (app *SITComApplication) Commit() types.ResponseCommit {
 	return types.ResponseCommit{Data: appHash}
 }
 
+// Query value from a corresponding key
 func (app *SITComApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
 	if len(req.Data) == 0 {
 		app.state.db.Print()
@@ -170,6 +179,7 @@ func (app *SITComApplication) Query(req types.RequestQuery) (res types.ResponseQ
 	return
 }
 
+// InitChain initializes blockchain with specified validator set
 func (app *SITComApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	for _, v := range req.Validators {
 		r := app.updateValidator(v)
@@ -180,6 +190,7 @@ func (app *SITComApplication) InitChain(req types.RequestInitChain) types.Respon
 	return types.ResponseInitChain{}
 }
 
+// BeginBlock decreases voting power from ByzantineValidators
 func (app *SITComApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
 	// reset valset changes
 	app.ValUpdates = make([]types.ValidatorUpdate, 0)
@@ -199,12 +210,14 @@ func (app *SITComApplication) BeginBlock(req types.RequestBeginBlock) types.Resp
 	return types.ResponseBeginBlock{}
 }
 
+// EndBlock computes when ending the current block
 func (app *SITComApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	return types.ResponseEndBlock{ValidatorUpdates: app.ValUpdates}
 }
 
 // ---------------------------------------------------------------------------
 
+// Validators updates validator
 func (app *SITComApplication) Validators() (validators []types.ValidatorUpdate) {
 	itr := app.state.db.Iterator(nil, nil)
 	for ; itr.Valid(); itr.Next() {
@@ -220,6 +233,7 @@ func (app *SITComApplication) Validators() (validators []types.ValidatorUpdate) 
 	return
 }
 
+// MakeValSetChangeTx encode base64 and return byte array
 func MakeValSetChangeTx(pubkey types.PubKey, power int64) []byte {
 	pubStr := base64.StdEncoding.EncodeToString(pubkey.Data)
 	return []byte(fmt.Sprintf("val:%s!%d", pubStr, power))
@@ -261,14 +275,6 @@ func (app *SITComApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx
 	return app.updateValidator(types.Ed25519ValidatorUpdate(pubkey, int64(power)))
 }
 
-/*func byteToHex(input []byte) string {
-	var hexValue string
-	for _, v := range input {
-		hexValue += fmt.Sprintf("%02x", v)
-	}
-	return hexValue
-}*/
-
 func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.ResponseDeliverTx {
 	key := []byte("val:" + string(v.PubKey.Data))
 
@@ -303,8 +309,7 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 	return types.ResponseDeliverTx{Code: code.CodeTypeOK}
 }
 
-//---------------- Tendermint ABCI ---------------------
-
+// StaffAddCompetence contains data that will be stored into blockchain
 type StaffAddCompetence struct {
 	StudentID    string `json:"student_id"`
 	CompetenceID string `json:"competence_id"`
@@ -313,6 +318,7 @@ type StaffAddCompetence struct {
 	Nonce        uint64 `json:"nonce"`
 }
 
+// AttendedActivity contains data that will be stored into blockchain
 type AttendedActivity struct {
 	StudentID  string `json:"student_id"`
 	ActivityID string `json:"activity_id"`
@@ -321,6 +327,7 @@ type AttendedActivity struct {
 	Nonce      uint64 `json:"nonce"`
 }
 
+// StaffAddCompetence method stores data into blockchain
 func (app *SITComApplication) StaffAddCompetence(body []byte) ([]types.Event, error) {
 	var update StaffAddCompetence
 	err := json.Unmarshal(body, &update)
@@ -360,6 +367,7 @@ func (app *SITComApplication) StaffAddCompetence(body []byte) ([]types.Event, er
 	return events, nil
 }
 
+// AttendedActivity method stores data into blockchain
 func (app *SITComApplication) AttendedActivity(body []byte) ([]types.Event, error) {
 	var update AttendedActivity
 	err := json.Unmarshal(body, &update)

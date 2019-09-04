@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/saguywalker/sitcomchain/sitcomapp"
 	"os"
 
+	"github.com/saguywalker/sitcomchain/sitcomapp"
 	"github.com/tendermint/tendermint/abci/server"
 	"github.com/tendermint/tendermint/abci/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
