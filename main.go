@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/saguywalker/sitcomchain/sitcomapp"
+	"github.com/saguywalker/sitcomchain/app"
 	"github.com/tendermint/tendermint/abci/server"
 	"github.com/tendermint/tendermint/abci/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -16,12 +16,12 @@ func main() {
 
 func initSitcomApp() error {
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
-	var app types.Application
+	var a types.Application
 
-	app = sitcomapp.NewSITComApplication("sitcom")
-	app.(*sitcomapp.SITComApplication).SetLogger(logger.With("module", "sitcomchain"))
+	a = app.NewSITComApplication("sitcom")
+	a.(*app.SITComApplication).SetLogger(logger.With("module", "sitcomchain"))
 
-	srv, err := server.NewServer("tcp://0.0.0.0:26658", "socket", app)
+	srv, err := server.NewServer("tcp://0.0.0.0:26658", "socket", a)
 	if err != nil {
 		return err
 	}
