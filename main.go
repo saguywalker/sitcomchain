@@ -18,7 +18,7 @@ func initSitcomApp() error {
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 	var a types.Application
 
-	a = app.NewSITComApplication("sitcom")
+	a = app.NewSITComApplication("sitcomdata")
 	a.(*app.SITComApplication).SetLogger(logger.With("module", "sitcomchain"))
 
 	srv, err := server.NewServer("tcp://0.0.0.0:26658", "socket", a)
