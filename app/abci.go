@@ -1,12 +1,12 @@
 package app
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 
 	"github.com/saguywalker/sitcomchain/code"
 	"github.com/tendermint/tendermint/abci/types"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	tmtypes "github.com/tendermint/tendermint/types"
 	"github.com/tendermint/tendermint/version"
 )
@@ -26,54 +26,34 @@ func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
 
 // DeliverTx updates new data into blockchain
 // val:${pubkey}!{0 or 1} => update validator
-// "add_competence=\{\"student_id\":\"59130500211\",\"competence_id\":\"30001\",\"by\":\"$publickey\",\"semester\":"12019"\}"'
-// "approve_activity=\{\"student_id\":\"59130500211\",\"activity_id\":\"4999999999\",\"approver\":\"$publickey\",\"semester\":\"12019\"\}"'
 func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	fmt.Println("In DeliverTx")
+	tx := req.Tx
 
-	if isValidatorTx(req.Tx) {
-		return app.execValidatorTx(req.Tx)
+	if isValidatorTx(tx) {
+		return app.execValidatorTx(tx)
 	}
 
-	parts := bytes.Split(req.Tx, []byte("="))
+	app.state.db.Set(tx, tx)
+	app.state.Size++
 
-	if len(parts) != 2 {
-		return types.ResponseDeliverTx{Code: code.CodeTypeBadData}
+	events := []types.Event{
+		{
+			Type: "blockchain.update",
+			Attributes: []cmn.KVPair{
+				{Key: []byte("merkle_root"), Value: tx},
+			},
+		},
 	}
 
-	returnLog := ""
-	var returnEvents []types.Event
-	returnCode := code.CodeTypeBadData
-
-	switch string(parts[0]) {
-	case "add_competence":
-		events, err := app.StaffAddCompetence(parts[1])
-		if err != nil {
-			returnLog = fmt.Sprint("Error with adding competence:", err)
-		} else {
-			returnCode = code.CodeTypeOK
-			returnEvents = events
-		}
-		break
-	case "approve_activity":
-		events, err := app.AttendedActivity(parts[1])
-		if err != nil {
-			returnLog = fmt.Sprint("Error with updating attended activity:", err)
-		} else {
-			returnCode = code.CodeTypeOK
-			returnEvents = events
-		}
-		break
-	default:
-		returnLog = fmt.Sprintf("Unknown function '%s'", parts[1])
-	}
-
-	return types.ResponseDeliverTx{Code: returnCode, Log: returnLog, Events: returnEvents}
+	return types.ResponseDeliverTx{Code: code.CodeTypeOK, Events: events}
 }
 
 // CheckTx validates the tx payload
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	fmt.Printf("CheckTx: %+v\n", string(req.Tx))
+	if len(req.Tx) != 32 || isValidatorTx(req.Tx) {
+		return types.ResponseCheckTx{Code: code.CodeTypeBadData, Log: "tx's size should be 32 or val:${pubkey}!{0 or 1}"}
+	}
+
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
