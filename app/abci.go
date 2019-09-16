@@ -50,7 +50,7 @@ func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.Respon
 
 // CheckTx validates the tx payload
 func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	if !(len(req.Tx) == 128 || len(req.Tx) == 64) || isValidatorTx(req.Tx) {
+	if !(len(req.Tx) == 32) || isValidatorTx(req.Tx) {
 		return types.ResponseCheckTx{Code: code.CodeTypeBadData, Log: fmt.Sprintf("expected sha256 digest or  val:${pubkey}!{0 or 1} (found %d data size)", len(req.Tx))}
 	}
 
