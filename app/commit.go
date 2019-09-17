@@ -3,18 +3,13 @@ package app
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/saguywalker/sitcomchain/code"
-	"github.com/saguywalker/sitcomchain/model"
 	"github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
-	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
 // Validators updates validator
@@ -107,89 +102,4 @@ func (app *SITComApplication) updateValidator(v types.ValidatorUpdate) types.Res
 	app.ValUpdates = append(app.ValUpdates, v)
 
 	return types.ResponseDeliverTx{Code: code.CodeTypeOK}
-}
-
-// StaffAddCompetence method stores data into blockchain
-func (app *SITComApplication) StaffAddCompetence(body []byte) ([]types.Event, error) {
-	var update model.StaffAddCompetence
-	err := json.Unmarshal(body, &update)
-	if err != nil {
-		return nil, err
-	}
-
-	update.Nonce = app.state.Size + 1
-
-	value, err := json.Marshal(update)
-	if err != nil {
-		return nil, err
-	}
-
-	semester := make([]byte, 2)
-	binary.LittleEndian.PutUint16(semester, update.Semester)
-
-	competenceID := make([]byte, 2)
-	binary.LittleEndian.PutUint16(competenceID, update.CompetenceID)
-
-	key := crypto.Sha256(value)
-
-	//Set struct_id to value
-	app.state.db.Set(key, value)
-	app.state.Size++
-
-	events := []types.Event{
-		{
-			Type: "competence.add",
-			Attributes: []cmn.KVPair{
-				{Key: []byte("txid"), Value: key},
-				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
-				{Key: []byte("competenceid"), Value: competenceID},
-				{Key: []byte("by"), Value: []byte(update.By)},
-				{Key: []byte("semester"), Value: semester},
-			},
-		},
-	}
-
-	return events, nil
-}
-
-// AttendedActivity method stores data into blockchain
-func (app *SITComApplication) AttendedActivity(body []byte) ([]types.Event, error) {
-	var update model.AttendedActivity
-	err := json.Unmarshal(body, &update)
-	if err != nil {
-		return nil, err
-	}
-
-	update.Nonce = app.state.Size + 1
-
-	value, err := json.Marshal(update)
-	if err != nil {
-		return nil, err
-	}
-
-	semester := make([]byte, 2)
-	binary.LittleEndian.PutUint16(semester, update.Semester)
-
-	activityID := make([]byte, 4)
-	binary.LittleEndian.PutUint32(activityID, update.ActivityID)
-
-	key := crypto.Sha256(value)
-
-	app.state.db.Set(key, value)
-	app.state.Size++
-
-	events := []types.Event{
-		{
-			Type: "activity.approve",
-			Attributes: []cmn.KVPair{
-				{Key: []byte("txid"), Value: key},
-				{Key: []byte("studentid"), Value: []byte(update.StudentID)},
-				{Key: []byte("activityid"), Value: activityID},
-				{Key: []byte("by"), Value: update.Approver},
-				{Key: []byte("semester"), Value: semester},
-			},
-		},
-	}
-
-	return events, nil
 }
