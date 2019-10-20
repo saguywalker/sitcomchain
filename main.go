@@ -95,14 +95,14 @@ func newTendermint(app types.Application, configFile string) (*tmNode.Node, erro
 	}
 
 	// create node
-	node, err := nm.NewNode(
+	node, err := tmNode.NewNode(
 		config,
 		pv,
 		nodeKey,
 		proxy.NewLocalClientCreator(app),
-		nm.DefaultGenesisDocProviderFunc(config),
-		nm.DefaultDBProvider,
-		nm.DefaultMetricsProvider(config.Instrumentation),
+		tmNode.DefaultGenesisDocProviderFunc(config),
+		tmNode.DefaultDBProvider,
+		tmNode.DefaultMetricsProvider(config.Instrumentation),
 		logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create new Tendermint node")
