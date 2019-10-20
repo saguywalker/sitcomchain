@@ -22,6 +22,7 @@ type State struct {
 
 	db           *badger.DB
 	currentBatch *badger.Txn
+	Size         uint64
 }
 
 // NewAppState create new state struct

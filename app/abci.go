@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 
@@ -14,14 +15,14 @@ import (
 )
 
 // Info return current information of blockchain
-func (a *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInfo) {
-	res.LastBlockHeight = a.state.Height
-	res.LastBlockAppHash = a.state.AppHash
+func (app *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInfo) {
+	res.LastBlockHeight = app.state.Height
+	res.LastBlockAppHash = app.state.AppHash
 	return res
 }
 
 // DeliverTx update new data
-func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.ResponseDeliverTx) {
+func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.ResponseDeliverTx) {
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
 		return types.ResponseDeliverTx{
@@ -33,9 +34,11 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 
 	switch payload.Method {
 	case "SetValidator":
-		res = a.setValidator(payload.Params)
+		res = app.setValidator(payload.Params)
+		app.state.Size++
 	case "GiveBadge":
-		a.state.currentBatch.Set([]byte(payload.Params), []byte(payload.Params))
+		app.state.currentBatch.Set([]byte(payload.Params), []byte(payload.Params))
+		app.state.Size++
 		res.Code = code.CodeTypeOK
 		res.Log = "success"
 	default:
@@ -47,7 +50,7 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 }
 
 // CheckTx validate data format before putting in mempool
-func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
 		return types.ResponseCheckTx{
@@ -89,15 +92,22 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseChec
 }
 
 // Commit commit a current transaction batch
-func (a *SitcomApplication) Commit() types.ResponseCommit {
-	a.state.currentBatch.Commit()
+func (app *SitcomApplication) Commit() types.ResponseCommit {
+	appHash := make([]byte, 8)
+	binary.LittleEndian.PutUint64(appHash, app.state.Size)
+	app.state.AppHash = appHash
+
+	app.state.Height++
+	app.state.SaveState()
+	app.state.currentBatch.Commit()
+
 	return types.ResponseCommit{Data: []byte{}}
 }
 
 // Query return data from blockchain
-func (a *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
+func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
 	res.Key = req.Data
-	err := a.state.db.View(func(txn *badger.Txn) error {
+	err := app.state.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(req.Data)
 		if err != nil && err != badger.ErrKeyNotFound {
 			return err
@@ -120,17 +130,17 @@ func (a *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQue
 }
 
 // InitChain is used for initialize a blockchain
-func (a *SitcomApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
+func (app *SitcomApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	return types.ResponseInitChain{}
 }
 
 // BeginBlock create new transaction batch
-func (a *SitcomApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
-	a.state.currentBatch = a.state.db.NewTransaction(true)
+func (app *SitcomApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
+	app.state.currentBatch = app.state.db.NewTransaction(true)
 	return types.ResponseBeginBlock{}
 }
 
-// EndBlock
-func (a *SitcomApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
+// EndBlock is called when ending block
+func (app *SitcomApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
 	return types.ResponseEndBlock{}
 }
