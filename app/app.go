@@ -12,8 +12,6 @@ import (
 type SitcomApplication struct {
 	types.BaseApplication
 
-	currentBatch       *badger.Txn
-	db                 *badger.DB
 	state              State
 	valUpdates         map[string]types.ValidatorUpdate
 	verifiedSignatures map[string]string
@@ -22,8 +20,12 @@ type SitcomApplication struct {
 var _ types.Application = (*SitcomApplication)(nil)
 
 func NewSitcomApp(db *badger.DB) *SitcomApplication {
+	appState := NewState(db)
+
 	return &SitcomApplication{
-		db: db,
+		state:              appState,
+		valUpdates:         make(map[string]types.ValidatorUpdate),
+		verifiedSignatures: make(map[string]string),
 	}
 }
 

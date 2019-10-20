@@ -23,7 +23,7 @@ func isValidatorTx(tx []byte) bool {
 }
 
 func (app *SitcomApplication) Validators() (validators []types.Validator) {
-	err := app.db.View(func(txn *badger.Txn) error {
+	err := app.state.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		itr := txn.NewIterator(opts)
 		defer itr.Close()
@@ -56,7 +56,7 @@ func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.Res
 
 	if v.Power == 0 {
 		// remove validator
-		err := app.db.View(func(txn *badger.Txn) error {
+		err := app.state.db.View(func(txn *badger.Txn) error {
 			if _, err := txn.Get(key); err != badger.ErrKeyNotFound {
 				return err
 			}
@@ -70,7 +70,7 @@ func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.Res
 				Log:  fmt.Sprintf("Cannot remove non-existent validator %x", key)}
 		}
 
-		app.currentBatch.Delete(key)
+		app.state.currentBatch.Delete(key)
 	} else {
 		// add or update validator
 		value := bytes.NewBuffer(make([]byte, 0))
@@ -79,7 +79,7 @@ func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.Res
 				Code: code.CodeTypeEncodingError,
 				Log:  fmt.Sprintf("Error encoding validator: %v", err)}
 		}
-		app.currentBatch.Set(key, value.Bytes())
+		app.state.currentBatch.Set(key, value.Bytes())
 	}
 
 	app.valUpdates[pubKeyBase64] = v
