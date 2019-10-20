@@ -22,6 +22,7 @@ func isValidatorTx(tx []byte) bool {
 	return strings.HasPrefix(string(tx), ValidatorSetChangePrefix)
 }
 
+// Validators return list of validator
 func (app *SitcomApplication) Validators() (validators []types.Validator) {
 	err := app.state.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
