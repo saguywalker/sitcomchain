@@ -9,4 +9,7 @@ const (
 	CodeTypeDuplicateKey
 	CodeTypeUnmarshalError
 	CodeTypeDecodingError
+	CodeTypeDuplicateNonce
+	CodeTypeEmptyMethod
+	CodeTypeInvalidMethod
 )

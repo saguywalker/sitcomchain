@@ -1,14 +1,11 @@
 package app
 
 import (
-	"bytes"
-
 	"github.com/dgraph-io/badger"
 	"github.com/tendermint/tendermint/abci/types"
-
-	"github.com/saguywalker/sitcomchain/code"
 )
 
+// SitcomApplication struct
 type SitcomApplication struct {
 	types.BaseApplication
 
@@ -17,10 +14,17 @@ type SitcomApplication struct {
 	verifiedSignatures map[string]string
 }
 
-var _ types.Application = (*SitcomApplication)(nil)
+var (
+	_          types.Application = (*SitcomApplication)(nil)
+	methodList                   = map[string]bool{
+		"SetValidator": true,
+		"GiveBadge":    true,
+	}
+)
 
+// NewSitcomApp return new SitcomApplication struct with db
 func NewSitcomApp(db *badger.DB) *SitcomApplication {
-	appState := NewState(db)
+	appState := NewAppState(db)
 
 	return &SitcomApplication{
 		state:              appState,
@@ -29,6 +33,7 @@ func NewSitcomApp(db *badger.DB) *SitcomApplication {
 	}
 }
 
+/*
 func (a *SitcomApplication) isValid(tx []byte) (errCode uint32) {
 	parts := bytes.Split(tx, []byte("="))
 	if len(parts) != 2 {
@@ -37,7 +42,7 @@ func (a *SitcomApplication) isValid(tx []byte) (errCode uint32) {
 
 	key, value := parts[0], parts[1]
 
-	err := a.db.View(func(txn *badger.Txn) error {
+	err := a.state.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil && err != badger.ErrKeyNotFound {
 			return err
@@ -60,3 +65,4 @@ func (a *SitcomApplication) isValid(tx []byte) (errCode uint32) {
 
 	return errCode
 }
+*/

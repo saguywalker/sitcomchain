@@ -88,7 +88,7 @@ func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.Res
 		Log:  "success"}
 }
 
-func (app *SitcomApplication) setValidator(param string, nodeID string) types.ResponseDeliverTx {
+func (app *SitcomApplication) setValidator(param string) types.ResponseDeliverTx {
 	var funcParam SetValidatorParam
 	err := json.Unmarshal([]byte(param), &funcParam)
 	if err != nil {
