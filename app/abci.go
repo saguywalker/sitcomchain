@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
@@ -107,6 +109,39 @@ func (app *SitcomApplication) Commit() types.ResponseCommit {
 // Query return data from blockchain
 func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
 	res.Key = req.Data
+	parts := strings.Split(string(res.Key), "=")
+	if len(parts) == 2 {
+		result := make([]byte, 0)
+		err := app.state.db.View(func(txn *badger.Txn) error {
+			opts := badger.DefaultIteratorOptions
+			itr := txn.NewIterator(opts)
+			defer itr.Close()
+			for itr.Rewind(); itr.Valid(); itr.Next() {
+				item := itr.Item()
+				k := item.Key()
+				if bytes.Contains(k, []byte(parts[0])) && bytes.Contains(k, []byte(parts[1])) {
+					result = append(result, []byte("|")...)
+					result = append(result, k...)
+				}
+			}
+			return nil
+		})
+
+		if err != nil {
+			panic(err)
+		}
+
+		if len(result) == 0 {
+			res.Log = "does not exists"
+			return
+		}
+
+		res.Log = "exists"
+		res.Value = result
+		return
+
+	}
+
 	err := app.state.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(req.Data)
 		if err != nil && err != badger.ErrKeyNotFound {
