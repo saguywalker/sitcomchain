@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/dgraph-io/badger"
@@ -25,6 +26,8 @@ func (app *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInf
 
 // DeliverTx update new data
 func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.ResponseDeliverTx) {
+	log.Printf("In deliverTx: %s\n", string(req.Tx))
+
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
 		return types.ResponseDeliverTx{
@@ -53,6 +56,8 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 
 // CheckTx validate data format before putting in mempool
 func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	log.Printf("In checkTx: %s\n", string(req.Tx))
+
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
 		return types.ResponseCheckTx{
@@ -94,20 +99,25 @@ func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCh
 }
 
 // Commit commit a current transaction batch
-func (app *SitcomApplication) Commit() types.ResponseCommit {
+func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 	appHash := make([]byte, 8)
 	binary.LittleEndian.PutUint64(appHash, app.state.Size)
+
 	app.state.AppHash = appHash
 
 	app.state.Height++
 	app.state.SaveState()
 	app.state.currentBatch.Commit()
 
-	return types.ResponseCommit{Data: []byte{}}
+	res.Data = appHash
+
+	return
 }
 
 // Query return data from blockchain
 func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
+	log.Printf("In query: %s\n", string(req.Data))
+
 	res.Key = req.Data
 	parts := strings.Split(string(res.Key), "=")
 	if len(parts) == 2 {
