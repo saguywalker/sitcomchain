@@ -23,14 +23,29 @@ import (
 	sitcomapp "github.com/saguywalker/sitcomchain/app"
 )
 
-var configFile string
+var (
+	configFile string
+	dbFile     string
+)
 
+/*
 func init() {
-	flag.StringVar(&configFile, "config", "$HOME/.tendermint/config/config.toml", "Path to config.toml")
+	flag.StringVar(&configFile, "config", fmt.Sprintf("%s/.tendermint/config/config.toml", homeDir), "Path to config.toml")
+	flag.StringVar(&dbFile, "db", fmt.Sprintf("%s/.tendermint/data/badger", homeDir), "Path to persistence storage")
 }
-
+*/
 func main() {
-	db, err := badger.Open(badger.DefaultOptions("/tmp/badger"))
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(homeDir)
+
+	flag.StringVar(&configFile, "config", fmt.Sprintf("%s/.tendermint/config/config.toml", homeDir), "Path to config.toml")
+	flag.StringVar(&dbFile, "db", fmt.Sprintf("%s/.tendermint/data/badger", homeDir), "Path to persistence storage")
+
+	db, err := badger.Open(badger.DefaultOptions("/home/sky/.tendermint/data"))
+	// db, err := badger.Open(badger.DefaultOptions("sitcomdata"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v\n", err)
 		os.Exit(1)
@@ -38,8 +53,6 @@ func main() {
 	defer db.Close()
 
 	app := sitcomapp.NewSitcomApp(db)
-
-	flag.Parse()
 
 	node, err := newTendermint(app, configFile)
 	if err != nil {
