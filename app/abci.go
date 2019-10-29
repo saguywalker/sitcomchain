@@ -137,7 +137,7 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 		}
 
 		res.Log = "exists"
-		res.Value = result
+		res.Value = result[1:]
 		return
 
 	}
