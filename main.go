@@ -21,7 +21,12 @@ func init() {
 }
 
 func main() {
-	db, err := badger.Open(badger.DefaultOptions("/home/sky/.tendermint/data"))
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
+	db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("%s/.tendermint/data", homeDir)))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
 		os.Exit(1)
