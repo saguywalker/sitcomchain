@@ -38,7 +38,12 @@ func main() {
 
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
-	server := abciserver.NewSocketServer(socketAddr, app)
+	// server := abciserver.NewSocketServer(socketAddr, app)
+	server, err := abciserver.NewServer(socketAddr, "socket", app)
+	if err != nil {
+		panic(err)
+	}
+
 	server.SetLogger(logger)
 	if err := server.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "error starting socket server: %v", err)
