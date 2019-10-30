@@ -50,6 +50,7 @@ func (app *SitcomApplication) Validators() (validators []types.Validator) {
 	return
 }
 
+
 // add, update, or remove a validator
 func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.ResponseDeliverTx {
 	pubKeyBase64 := base64.StdEncoding.EncodeToString(v.PubKey.GetData())
@@ -89,6 +90,7 @@ func (app *SitcomApplication) updateValidator(v types.ValidatorUpdate) types.Res
 		Log:  "success"}
 }
 
+
 func (app *SitcomApplication) setValidator(param string) types.ResponseDeliverTx {
 	var funcParam SetValidatorParam
 	err := json.Unmarshal([]byte(param), &funcParam)
@@ -97,16 +99,18 @@ func (app *SitcomApplication) setValidator(param string) types.ResponseDeliverTx
 			Code: code.CodeTypeUnmarshalError,
 			Log:  err.Error()}
 	}
-
+/*
 	pubKey, err := base64.StdEncoding.DecodeString(string(funcParam.PublicKey))
 	if err != nil {
 		return types.ResponseDeliverTx{
 			Code: code.CodeTypeDecodingError,
 			Log:  err.Error()}
 	}
+*/
 	var pubKeyObj types.PubKey
 	pubKeyObj.Type = "ed25519"
-	pubKeyObj.Data = pubKey
+	// pubKeyObj.Data = pubKey
+	pubKeyObj.Data = funcParam.PublicKey
 	var newValidator types.ValidatorUpdate
 	newValidator.PubKey = pubKeyObj
 	newValidator.Power = funcParam.Power
