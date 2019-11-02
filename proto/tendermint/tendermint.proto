@@ -8,7 +8,7 @@ message Tx {
 
 message Payload {
     string method = 1;
-    string params = 2;
+    bytes params = 2;
 }
 
 message Query {
