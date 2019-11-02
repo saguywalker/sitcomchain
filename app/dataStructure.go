@@ -9,7 +9,7 @@ type SetValidatorParam struct {
 // GiveBadge for adding new data
 type GiveBadge struct {
 	StudentID    string `json:"student_id"`
-	CompetenceID string `json:"competence_id"`
-	Giver        []byte `json:"giver"`
-	Semester     uint16 `json:"semester"`
+	CompetenceID uint32 `json:"competence_id"`
+	Semester     uint32 `json:"semester"`
+	Giver        []byte `json:"-"`
 }

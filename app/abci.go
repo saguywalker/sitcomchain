@@ -3,7 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/binary"
-	// "encoding/json"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -42,7 +42,22 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		res = app.setValidator(string(payload.Params))
 		app.state.Size++
 	case "GiveBadge":
-		app.state.currentBatch.Set([]byte(payload.Params), []byte(payload.Params))
+		var badge GiveBadge
+		if err := json.Unmarshal(payload.Params, &badge); err != nil {
+			res.Code = code.CodeTypeUnmarshalError
+			res.Log = "error when unmarshal params"
+			break
+		}
+
+		badge.Giver = nil
+		badgeKey, err := json.Marshal(badge)
+		if err != nil {
+			res.Code = code.CodeTypeEncodingError
+			res.Log = "error when marshal badgeKey"
+			break
+		}
+
+		app.state.currentBatch.Set(badgeKey, []byte(payload.Params))
 		app.state.Size++
 		res.Code = code.CodeTypeOK
 		res.Log = "success"
@@ -127,6 +142,7 @@ func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
 	log.Printf("In query: %s\n", string(req.Data))
 
+	// For query
 	res.Key = req.Data
 	parts := strings.Split(string(res.Key), "=")
 	if len(parts) == 2 {
@@ -161,6 +177,7 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 
 	}
 
+	// For verify
 	err := app.state.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(req.Data)
 		if err != nil && err != badger.ErrKeyNotFound {
