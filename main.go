@@ -7,7 +7,6 @@ import (
 	// "os/signal"
 	// "syscall"
 
-	"github.com/dgraph-io/badger"
 	abciserver "github.com/tendermint/tendermint/abci/server"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
@@ -22,14 +21,7 @@ func init() {
 }
 
 func main() {
-	// db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("%s/.tendermint/data", homeDir)))
-	db, err := badger.Open(badger.DefaultOptions("data"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-	app := sitcomapp.NewSitcomApp(db)
+	app := sitcomapp.NewSitcomApp("data")
 
 	flag.Parse()
 

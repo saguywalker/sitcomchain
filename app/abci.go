@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 
-	"github.com/dgraph-io/badger"
 	"github.com/gogo/protobuf/proto"
 	"github.com/tendermint/tendermint/abci/types"
 	"golang.org/x/crypto/ed25519"
@@ -37,8 +35,6 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 
 	payload := txObj.Payload
 
-	batch := app.state.db.NewTransaction(true)
-
 	switch payload.Method {
 	case "SetValidator":
 		res = app.setValidator(string(payload.Params))
@@ -60,8 +56,7 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		}
 
 		log.Printf("k: %s, v: %s\n", badgeKey, payload.Params)
-		// app.state.currentBatch.Set(badgeKey, payload.Params)
-		batch.Set(badgeKey, payload.Params)
+		app.state.db.Set(badgeKey, payload.Params)
 		app.state.Size++
 		res.Code = code.CodeTypeOK
 		res.Log = "success"
@@ -69,8 +64,6 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		res.Log = fmt.Sprintf("unknown method %s", payload.Method)
 		res.Code = code.CodeTypeInvalidMethod
 	}
-
-	batch.Commit()
 
 	return res
 }
@@ -149,28 +142,9 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 	log.Printf("In query: %s\n", string(req.Data))
 
 	if len(req.Data) == 0 {
-		err := app.state.db.View(func(txn *badger.Txn) error {
-			opts := badger.DefaultIteratorOptions
-			itr := txn.NewIterator(opts)
-			defer itr.Close()
-			for itr.Rewind(); itr.Valid(); itr.Next() {
-				item := itr.Item()
-				k := item.Key()
-				err := item.Value(func(v []byte) error {
-					log.Printf("k: %s, v: %s\n", k, v)
-					return nil
-				})
-
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-			return nil
-		})
-		if err != nil {
-			res.Log = err.Error()
-			return
+		itr := app.state.db.Iterator(nil, nil)
+		for ; itr.Valid(); itr.Next() {
+			log.Printf("k: %s, v: %s\n", itr.Key(), itr.Value())
 		}
 
 		return
@@ -178,28 +152,16 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 
 	// For query
 	res.Key = req.Data
-	parts := strings.Split(string(res.Key), "=")
+	parts := bytes.Split(res.Key, []byte("="))
 	if len(parts) == 2 {
 		result := make([]byte, 0)
-		err := app.state.db.View(func(txn *badger.Txn) error {
-			opts := badger.DefaultIteratorOptions
-			itr := txn.NewIterator(opts)
-			defer itr.Close()
-			for itr.Rewind(); itr.Valid(); itr.Next() {
-				item := itr.Item()
-				k := item.Key()
-				if bytes.Contains(k, []byte(parts[0])) && bytes.Contains(k, []byte(parts[1])) {
-					result = append(result, []byte("|")...)
-					result = append(result, k...)
-				}
+		itr := app.state.db.Iterator(nil, nil)
+		for ; itr.Valid(); itr.Next() {
+			key := itr.Key()
+			if bytes.Contains(key, parts[0]) && bytes.Contains(key, parts[1]) {
+				result = append(result, []byte("|")...)
+				result = append(result, key...)
 			}
-			return nil
-		})
-
-		if err != nil {
-			res.Log = err.Error()
-			res.Code = code.CodeTypeUnknownError
-			return
 		}
 
 		if len(result) == 0 {
@@ -214,28 +176,14 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 	}
 
 	// For verify
-	err := app.state.db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(req.Data)
-		if err != nil && err != badger.ErrKeyNotFound {
-			return err
-		}
-		if err == badger.ErrKeyNotFound {
-			res.Log = "does not exist"
-		} else {
-			return item.Value(func(val []byte) error {
-				res.Log = "exists"
-				res.Value = val
-				return nil
-			})
-		}
-		return nil
-	})
-	if err != nil {
-		res.Log = err.Error()
-		res.Code = code.CodeTypeUnknownError
+	value := app.state.db.Get(req.Data)
+	if value != nil {
+		res.Log = "exists"
+		res.Value = value
 		return
 	}
 
+	res.Log = "does not exist"
 	return
 }
 

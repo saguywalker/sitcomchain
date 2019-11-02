@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/dgraph-io/badger"
 	"github.com/tendermint/tendermint/abci/types"
+	dbm "github.com/tendermint/tm-db"
 )
 
 // SitcomApplication struct
@@ -23,7 +23,11 @@ var (
 )
 
 // NewSitcomApp return new SitcomApplication struct with db
-func NewSitcomApp(db *badger.DB) *SitcomApplication {
+func NewSitcomApp(dbDir string) *SitcomApplication {
+	db, err := dbm.NewGoLevelDB("sitcomchain", dbDir)
+	if err != nil {
+		panic(err)
+	}
 	appState := NewAppState(db)
 
 	return &SitcomApplication{

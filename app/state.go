@@ -3,7 +3,7 @@ package app
 import (
 	"encoding/json"
 
-	"github.com/dgraph-io/badger"
+	dbm "github.com/tendermint/tm-db"
 )
 
 var (
@@ -20,13 +20,12 @@ type StateMetaData struct {
 type State struct {
 	StateMetaData
 
-	db           *badger.DB
-	currentBatch *badger.Txn
-	Size         uint64
+	db   dbm.DB
+	Size uint64
 }
 
 // NewAppState create new state struct
-func NewAppState(db *badger.DB) State {
+func NewAppState(db dbm.DB) State {
 	stateMetaData := loadAppState(db)
 
 	state := State{
@@ -37,25 +36,9 @@ func NewAppState(db *badger.DB) State {
 	return state
 }
 
-func loadAppState(db *badger.DB) (stateMetaData StateMetaData) {
-	err := db.View(func(txn *badger.Txn) error {
-		item, err := txn.Get(stateKey)
-		if err != nil {
-			return err
-		}
-
-		err = item.Value(func(val []byte) error {
-			if err := json.Unmarshal(val, &stateMetaData); err != nil {
-				return err
-			}
-
-			return nil
-		})
-
-		return err
-	})
-
-	if err != nil && err != badger.ErrKeyNotFound {
+func loadAppState(db dbm.DB) (stateMetaData StateMetaData) {
+	stateBytes := db.Get(stateKey)
+	if err := json.Unmarshal(stateBytes, &stateMetaData); err != nil {
 		panic(err)
 	}
 
@@ -69,5 +52,5 @@ func (state *State) SaveState() {
 		panic(err)
 	}
 
-	state.currentBatch.Set(stateKey, stateBytes)
+	state.db.Set(stateKey, stateBytes)
 }
