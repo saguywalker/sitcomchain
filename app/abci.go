@@ -142,6 +142,34 @@ func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
 	log.Printf("In query: %s\n", string(req.Data))
 
+	if len(req.Data) == 0 {
+		err := app.state.db.View(func(txn *badger.Txn) error {
+			opts := badger.DefaultIteratorOptions
+			itr := txn.NewIterator(opts)
+			defer itr.Close()
+			for itr.Rewind(); itr.Valid(); itr.Next() {
+				item := itr.Item()
+				k := item.Key()
+				err := item.Value(func(v []byte) error {
+					log.Printf("k: %s, v: %s\n", k, v)
+					return nil
+				})
+
+				if err != nil {
+					return err
+				}
+				return nil 
+			}
+			return nil
+		})
+		if err != nil {
+			res.Log = err.Error()
+			return
+		}
+
+		return
+	}
+
 	// For query
 	res.Key = req.Data
 	parts := strings.Split(string(res.Key), "=")
