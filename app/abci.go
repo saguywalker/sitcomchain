@@ -161,12 +161,10 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 					return nil
 				})
 
-				item.Val
-
 				if err != nil {
 					return err
 				}
-				return nil 
+				return nil
 			}
 			return nil
 		})
