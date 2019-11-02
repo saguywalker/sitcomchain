@@ -39,7 +39,7 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 
 	switch payload.Method {
 	case "SetValidator":
-		res = app.setValidator(payload.Params)
+		res = app.setValidator(string(payload.Params))
 		app.state.Size++
 	case "GiveBadge":
 		app.state.currentBatch.Set([]byte(payload.Params), []byte(payload.Params))
