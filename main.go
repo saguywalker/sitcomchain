@@ -4,11 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
+	// "os/signal"
+	// "syscall"
 
 	"github.com/dgraph-io/badger"
 	abciserver "github.com/tendermint/tendermint/abci/server"
+	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
 
 	sitcomapp "github.com/saguywalker/sitcomchain/app"
@@ -21,12 +22,13 @@ func init() {
 }
 
 func main() {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		panic(err)
-	}
+	// homeDir, err := os.UserHomeDir()
+	// if err != nil {
+	// panic(err)
+	// }
 
-	db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("%s/.tendermint/data", homeDir)))
+	// db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("%s/.tendermint/data", homeDir)))
+	db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("sitdomdata")))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to open badger db: %v", err)
 		os.Exit(1)
@@ -50,9 +52,16 @@ func main() {
 		os.Exit(1)
 	}
 	defer server.Stop()
+	/*
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		os.Exit(0)
+	*/
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
-	os.Exit(0)
+	cmn.TrapSignal(logger, func() {
+		server.Stop()
+	})
+
+	select {}
 }

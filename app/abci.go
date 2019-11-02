@@ -60,22 +60,27 @@ func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCh
 
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
+		log.Println("Error in unmarshal txObj")
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeUnmarshalError,
 			Log:  err.Error()}
 	}
+
+	log.Printf("txObj: %+v\n", txObj)
 
 	payload := txObj.Payload
 	pubKey := txObj.PublicKey
 	signature := txObj.Signature
 
 	if payload.Method == "" {
+		log.Println("Empty method")
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeEmptyMethod,
 			Log:  "method cannot be empty"}
 	}
 
 	if _, exists := methodList[payload.Method]; !exists {
+		log.Printf("Unknown method %s", payload.Method)
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeInvalidMethod,
 			Log:  fmt.Sprintf("unknown for method %s", payload.Method)}
@@ -83,12 +88,14 @@ func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCh
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
+		log.Printf("Error in marshal payload: %+v\n", payload)
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeEncodingError,
 			Log:  "error with payload unmarshal"}
 	}
 
 	if !ed25519.Verify(pubKey, payloadBytes, signature) {
+		log.Printf("Failed in signature verification\n")
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeUnauthorized,
 			Log:  "failed in signature verification",
