@@ -163,7 +163,9 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 		})
 
 		if err != nil {
-			panic(err)
+			res.Log = err.Error()
+			res.Code = code.CodeTypeUnknownError
+			return
 		}
 
 		if len(result) == 0 {
@@ -195,8 +197,11 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		res.Log = err.Error()
+		res.Code = code.CodeTypeUnknownError
+		return
 	}
+
 	return
 }
 

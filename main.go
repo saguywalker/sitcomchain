@@ -22,11 +22,6 @@ func init() {
 }
 
 func main() {
-	// homeDir, err := os.UserHomeDir()
-	// if err != nil {
-	// panic(err)
-	// }
-
 	// db, err := badger.Open(badger.DefaultOptions(fmt.Sprintf("%s/.tendermint/data", homeDir)))
 	db, err := badger.Open(badger.DefaultOptions("data"))
 	if err != nil {
