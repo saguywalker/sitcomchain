@@ -3,7 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/json"
+	// "encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -85,16 +85,18 @@ func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCh
 			Code: code.CodeTypeInvalidMethod,
 			Log:  fmt.Sprintf("unknown for method %s", payload.Method)}
 	}
+	/*
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			log.Printf("Error in marshal payload: %+v\n", payload)
+			return types.ResponseCheckTx{
+				Code: code.CodeTypeEncodingError,
+				Log:  "error with payload unmarshal"}
+		}
+	*/
+	log.Printf("pubkey: 0x%x\nparams: %s\nsignature: 0x%x\n", pubKey, payload.Params, signature)
 
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("Error in marshal payload: %+v\n", payload)
-		return types.ResponseCheckTx{
-			Code: code.CodeTypeEncodingError,
-			Log:  "error with payload unmarshal"}
-	}
-
-	if !ed25519.Verify(pubKey, payloadBytes, signature) {
+	if !ed25519.Verify(pubKey, payload.Params, signature) {
 		log.Printf("Failed in signature verification\n")
 		return types.ResponseCheckTx{
 			Code: code.CodeTypeUnauthorized,
