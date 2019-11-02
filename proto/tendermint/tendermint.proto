@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+message Tx {
+    Payload payload = 1;
+    bytes publicKey = 2;
+    bytes signature = 3;
+}
+
+message Payload {
+    string method = 1;
+    bytes params = 2;
+}
+
+message Query {
+    string method = 1;
+    string params = 2;
+}

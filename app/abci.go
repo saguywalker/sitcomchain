@@ -1,121 +1,205 @@
 package app
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"log"
+
+	"github.com/gogo/protobuf/proto"
+	"github.com/tendermint/tendermint/abci/types"
+	"golang.org/x/crypto/ed25519"
 
 	"github.com/saguywalker/sitcomchain/code"
-	"github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	tmtypes "github.com/tendermint/tendermint/types"
-	"github.com/tendermint/tendermint/version"
+	protoTm "github.com/saguywalker/sitcomchain/proto/tendermint"
 )
 
-// Info set an information of blockchain
-func (app *SITComApplication) Info(req types.RequestInfo) types.ResponseInfo {
-	res := types.ResponseInfo{
-		Data:       fmt.Sprintf("{\"size\":%v}", app.state.Size),
-		Version:    version.ABCIVersion,
-		AppVersion: protocolVersion.Uint64(),
-	}
+// Info return current information of blockchain
+func (app *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInfo) {
 	res.LastBlockHeight = app.state.Height
 	res.LastBlockAppHash = app.state.AppHash
-	fmt.Printf("%+v\n", res)
 	return res
 }
 
-// DeliverTx updates new data into blockchain
-// val:${pubkey}!{0 or 1} => update validator
-func (app *SITComApplication) DeliverTx(req types.RequestDeliverTx) types.ResponseDeliverTx {
-	tx := req.Tx
+// DeliverTx update new data
+func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.ResponseDeliverTx) {
+	log.Printf("In deliverTx: %s\n", string(req.Tx))
 
-	if isValidatorTx(tx) {
-		return app.execValidatorTx(tx)
+	var txObj protoTm.Tx
+	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeUnmarshalError,
+			Log:  err.Error()}
 	}
 
-	app.state.db.Set(tx, tx)
-	app.state.Size++
+	payload := txObj.Payload
 
-	events := []types.Event{
-		{
-			Type: "blockchain.update",
-			Attributes: []cmn.KVPair{
-				{Key: []byte("merkle_root"), Value: tx},
-			},
-		},
+	switch payload.Method {
+	case "SetValidator":
+		res = app.setValidator(string(payload.Params))
+		app.state.Size++
+	case "GiveBadge":
+		var sorted map[string]interface{}
+		if err := json.Unmarshal(payload.Params, &sorted); err != nil {
+			res.Code = code.CodeTypeUnmarshalError
+			res.Log = "error when unmarshal params"
+			break
+		}
+
+		delete(sorted, "giver")
+
+		badgeKey, err := json.Marshal(sorted)
+		if err != nil {
+			res.Code = code.CodeTypeEncodingError
+			res.Log = "error when marshal badgeKey"
+			break
+		}
+
+		log.Printf("k: %s, v: %s\n", badgeKey, payload.Params)
+		app.state.db.Set(badgeKey, payload.Params)
+		app.state.Size++
+		res.Code = code.CodeTypeOK
+		res.Log = "success"
+	default:
+		res.Log = fmt.Sprintf("unknown method %s", payload.Method)
+		res.Code = code.CodeTypeInvalidMethod
 	}
 
-	return types.ResponseDeliverTx{Code: code.CodeTypeOK, Events: events}
+	return res
 }
 
-// CheckTx validates the tx payload
-func (app *SITComApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	if !(len(req.Tx) == 32) || isValidatorTx(req.Tx) {
-		return types.ResponseCheckTx{Code: code.CodeTypeBadData, Log: fmt.Sprintf("expected sha256 digest or  val:${pubkey}!{0 or 1} (found %d data size)", len(req.Tx))}
+// CheckTx validate data format before putting in mempool
+func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
+	log.Printf("In checkTx: %s\n", string(req.Tx))
+
+	var txObj protoTm.Tx
+	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
+		log.Println("Error in unmarshal txObj")
+		return types.ResponseCheckTx{
+			Code: code.CodeTypeUnmarshalError,
+			Log:  err.Error()}
+	}
+
+	log.Printf("txObj: %+v\n", txObj)
+
+	payload := txObj.Payload
+	pubKey := txObj.PublicKey
+	signature := txObj.Signature
+
+	if payload.Method == "" {
+		log.Println("Empty method")
+		return types.ResponseCheckTx{
+			Code: code.CodeTypeEmptyMethod,
+			Log:  "method cannot be empty"}
+	}
+
+	if _, exists := methodList[payload.Method]; !exists {
+		log.Printf("Unknown method %s", payload.Method)
+		return types.ResponseCheckTx{
+			Code: code.CodeTypeInvalidMethod,
+			Log:  fmt.Sprintf("unknown for method %s", payload.Method)}
+	}
+	/*
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			log.Printf("Error in marshal payload: %+v\n", payload)
+			return types.ResponseCheckTx{
+				Code: code.CodeTypeEncodingError,
+				Log:  "error with payload unmarshal"}
+		}
+	*/
+	log.Printf("pubkey: 0x%x\nparams: %s\nsignature: 0x%x\n", pubKey, payload.Params, signature)
+
+	if !ed25519.Verify(pubKey, payload.Params, signature) {
+		log.Printf("Failed in signature verification\n")
+		return types.ResponseCheckTx{
+			Code: code.CodeTypeUnauthorized,
+			Log:  "failed in signature verification",
+		}
 	}
 
 	return types.ResponseCheckTx{Code: code.CodeTypeOK}
 }
 
-// Commit updates new current state into blockchain
-func (app *SITComApplication) Commit() types.ResponseCommit {
+// Commit commit a current transaction batch
+func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 	appHash := make([]byte, 8)
 	binary.LittleEndian.PutUint64(appHash, app.state.Size)
-	app.state.AppHash = appHash
-	app.state.Height++
-	saveState(app.state)
-	return types.ResponseCommit{Data: appHash}
-}
 
-// Query value from a corresponding key
-func (app *SITComApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
-	if len(req.Data) == 0 {
-		app.state.db.Print()
-	} else {
-		res.Key = req.Data
-		value := app.state.db.Get(req.Data)
-		res.Value = value
-		if value != nil {
-			res.Log = "exists"
-		} else {
-			res.Log = "does not exist"
-		}
-	}
+	app.state.AppHash = appHash
+
+	app.state.Height++
+	app.state.SaveState()
+	// app.state.currentBatch.Commit()
+
+	res.Data = appHash
+
 	return
 }
 
-// InitChain initializes blockchain with specified validator set
-func (app *SITComApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
-	for _, v := range req.Validators {
-		r := app.updateValidator(v)
-		if r.IsErr() {
-			app.logger.Error("Error updating validators", "r", r)
+// Query return data from blockchain
+func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
+	log.Printf("In query: %s\n", string(req.Data))
+
+	if len(req.Data) == 0 {
+		itr := app.state.db.Iterator(nil, nil)
+		for ; itr.Valid(); itr.Next() {
+			log.Printf("k: %s, v: %s\n", itr.Key(), itr.Value())
 		}
+
+		return
 	}
+
+	// For query
+	res.Key = req.Data
+	parts := bytes.Split(res.Key, []byte("="))
+	if len(parts) == 2 {
+		result := make([]byte, 0)
+		itr := app.state.db.Iterator(nil, nil)
+		for ; itr.Valid(); itr.Next() {
+			key := itr.Key()
+			if bytes.Contains(key, parts[0]) && bytes.Contains(key, parts[1]) {
+				result = append(result, []byte("|")...)
+				result = append(result, key...)
+			}
+		}
+
+		if len(result) == 0 {
+			res.Log = "does not exists"
+			return
+		}
+
+		res.Log = "exists"
+		res.Value = result[1:]
+		return
+
+	}
+
+	// For verify
+	value := app.state.db.Get(req.Data)
+	if value != nil {
+		res.Log = "exists"
+		res.Value = value
+		return
+	}
+
+	res.Log = "does not exist"
+	return
+}
+
+// InitChain is used for initialize a blockchain
+func (app *SitcomApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
 	return types.ResponseInitChain{}
 }
 
-// BeginBlock decreases voting power from ByzantineValidators
-func (app *SITComApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
-	// reset valset changes
-	app.ValUpdates = make([]types.ValidatorUpdate, 0)
-
-	for _, ev := range req.ByzantineValidators {
-		if ev.Type == tmtypes.ABCIEvidenceTypeDuplicateVote {
-			// decrease voting power by 1
-			if ev.TotalVotingPower == 0 {
-				continue
-			}
-			app.updateValidator(types.ValidatorUpdate{
-				PubKey: app.valAddrToPubKeyMap[string(ev.Validator.Address)],
-				Power:  ev.TotalVotingPower - 1,
-			})
-		}
-	}
+// BeginBlock create new transaction batch
+func (app *SitcomApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
+	// app.state.currentBatch = app.state.db.NewTransaction(true)
 	return types.ResponseBeginBlock{}
 }
 
-// EndBlock computes when ending the current block
-func (app *SITComApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{ValidatorUpdates: app.ValUpdates}
+// EndBlock is called when ending block
+func (app *SitcomApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
+	return types.ResponseEndBlock{}
 }

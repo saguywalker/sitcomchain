@@ -1,40 +1,54 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"os"
+	// "os/signal"
+	// "syscall"
 
-	"github.com/saguywalker/sitcomchain/app"
-	"github.com/tendermint/tendermint/abci/server"
-	"github.com/tendermint/tendermint/abci/types"
+	abciserver "github.com/tendermint/tendermint/abci/server"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+
+	sitcomapp "github.com/saguywalker/sitcomchain/app"
 )
 
-func main() {
-	initSitcomApp()
+var socketAddr string
+
+func init() {
+	flag.StringVar(&socketAddr, "socket-addr", "tcp://0.0.0.0:26658", "socket address")
 }
 
-func initSitcomApp() error {
+func main() {
+	app := sitcomapp.NewSitcomApp("data")
+
+	flag.Parse()
+
 	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
-	var a types.Application
 
-	a = app.NewSITComApplication("sitcomdata")
-	a.(*app.SITComApplication).SetLogger(logger.With("module", "sitcomchain"))
-
-	srv, err := server.NewServer("tcp://0.0.0.0:26658", "socket", a)
+	// server := abciserver.NewSocketServer(socketAddr, app)
+	server, err := abciserver.NewServer(socketAddr, "socket", app)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
-	srv.SetLogger(logger.With("module", "abci-server"))
-	if err := srv.Start(); err != nil {
-		return err
+	server.SetLogger(logger)
+	if err := server.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "error starting socket server: %v", err)
+		os.Exit(1)
 	}
+	defer server.Stop()
+	/*
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		<-c
+		os.Exit(0)
+	*/
 
 	cmn.TrapSignal(logger, func() {
-		srv.Stop()
+		server.Stop()
 	})
 
 	select {}
-
 }
