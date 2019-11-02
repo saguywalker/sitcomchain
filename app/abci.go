@@ -37,6 +37,8 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 
 	payload := txObj.Payload
 
+	batch := app.state.db.NewTransaction(true)
+
 	switch payload.Method {
 	case "SetValidator":
 		res = app.setValidator(string(payload.Params))
@@ -58,7 +60,8 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		}
 
 		log.Printf("k: %s, v: %s\n", badgeKey, payload.Params)
-		app.state.currentBatch.Set(badgeKey, payload.Params)
+		// app.state.currentBatch.Set(badgeKey, payload.Params)
+		batch.Set(badgeKey, payload.Params)
 		app.state.Size++
 		res.Code = code.CodeTypeOK
 		res.Log = "success"
@@ -66,6 +69,8 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		res.Log = fmt.Sprintf("unknown method %s", payload.Method)
 		res.Code = code.CodeTypeInvalidMethod
 	}
+
+	batch.Commit()
 
 	return res
 }
@@ -132,7 +137,7 @@ func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 
 	app.state.Height++
 	app.state.SaveState()
-	app.state.currentBatch.Commit()
+	// app.state.currentBatch.Commit()
 
 	res.Data = appHash
 
@@ -155,6 +160,8 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 					log.Printf("k: %s, v: %s\n", k, v)
 					return nil
 				})
+
+				item.Val
 
 				if err != nil {
 					return err
@@ -241,7 +248,7 @@ func (app *SitcomApplication) InitChain(req types.RequestInitChain) types.Respon
 
 // BeginBlock create new transaction batch
 func (app *SitcomApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
-	app.state.currentBatch = app.state.db.NewTransaction(true)
+	// app.state.currentBatch = app.state.db.NewTransaction(true)
 	return types.ResponseBeginBlock{}
 }
 
