@@ -40,15 +40,16 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 		res = app.setValidator(string(payload.Params))
 		app.state.Size++
 	case "GiveBadge":
-		var badge GiveBadge
-		if err := json.Unmarshal(payload.Params, &badge); err != nil {
+		var sorted map[string]interface{}
+		if err := json.Unmarshal(payload.Params, &sorted); err != nil {
 			res.Code = code.CodeTypeUnmarshalError
 			res.Log = "error when unmarshal params"
 			break
 		}
 
-		badge.Giver = nil
-		badgeKey, err := json.Marshal(badge)
+		delete(sorted, "giver")
+
+		badgeKey, err := json.Marshal(sorted)
 		if err != nil {
 			res.Code = code.CodeTypeEncodingError
 			res.Log = "error when marshal badgeKey"
