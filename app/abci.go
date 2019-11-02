@@ -57,7 +57,8 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 			break
 		}
 
-		app.state.currentBatch.Set(badgeKey, []byte(payload.Params))
+		log.Printf("k: %s, v: %s\n", badgeKey, payload.Params)
+		app.state.currentBatch.Set(badgeKey, payload.Params)
 		app.state.Size++
 		res.Code = code.CodeTypeOK
 		res.Log = "success"
