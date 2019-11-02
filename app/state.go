@@ -38,8 +38,10 @@ func NewAppState(db dbm.DB) State {
 
 func loadAppState(db dbm.DB) (stateMetaData StateMetaData) {
 	stateBytes := db.Get(stateKey)
-	if err := json.Unmarshal(stateBytes, &stateMetaData); err != nil {
-		panic(err)
+	if len(stateBytes) != 0 {
+		if err := json.Unmarshal(stateBytes, &stateMetaData); err != nil {
+			panic(err)
+		}
 	}
 
 	return stateMetaData
