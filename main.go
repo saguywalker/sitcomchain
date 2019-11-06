@@ -21,7 +21,7 @@ func init() {
 
 func main() {
 	logger := logrus.New()
-	app := sitcomapp.NewSitcomApp("data", logrus.NewEntry(logger))
+	app := sitcomapp.NewSitcomApp("data", logger)
 
 	flag.Parse()
 

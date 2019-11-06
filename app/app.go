@@ -15,7 +15,7 @@ type SitcomApplication struct {
 	AppProtocolVersion uint64
 	CurrentChain       string
 	Version            string
-	logger             *logrus.Entry
+	logger             *logrus.Logger
 	state              State
 	valUpdates         map[string]types.ValidatorUpdate
 	verifiedSignatures map[string]string
@@ -30,7 +30,7 @@ var (
 )
 
 // NewSitcomApp return new SitcomApplication struct with db
-func NewSitcomApp(dbDir string, logger *logrus.Entry) *SitcomApplication {
+func NewSitcomApp(dbDir string, logger *logrus.Logger) *SitcomApplication {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorln(r)
@@ -46,6 +46,7 @@ func NewSitcomApp(dbDir string, logger *logrus.Entry) *SitcomApplication {
 	return &SitcomApplication{
 		AppProtocolVersion: version.AppProtocolVersion,
 		Version:            version.Version,
+		logger:             logger,
 		state:              appState,
 		valUpdates:         make(map[string]types.ValidatorUpdate),
 		verifiedSignatures: make(map[string]string),
