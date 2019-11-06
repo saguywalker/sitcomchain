@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/tendermint/tendermint/abci/types"
@@ -17,6 +16,8 @@ import (
 
 // Info return current information of blockchain
 func (app *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInfo) {
+	res.Version = app.Version
+	res.AppVersion = app.AppProtocolVersion
 	res.LastBlockHeight = app.state.Height
 	res.LastBlockAppHash = app.state.AppHash
 	return res
@@ -24,7 +25,14 @@ func (app *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInf
 
 // DeliverTx update new data
 func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.ResponseDeliverTx) {
-	log.Printf("In deliverTx: %s\n", string(req.Tx))
+	defer func() {
+		if r := recover(); r != nil {
+			app.logger.Errorln(r)
+			res.Code = code.CodeTypeUnknownError
+		}
+	}()
+
+	app.logger.Infof("In deliverTx: %s\n", string(req.Tx))
 
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
@@ -56,7 +64,7 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 			break
 		}
 
-		log.Printf("k: %s, v: %s\n", badgeKey, payload.Params)
+		app.logger.Infof("k: %s, v: %s\n", badgeKey, payload.Params)
 		app.state.db.Set(badgeKey, payload.Params)
 		app.state.Size++
 		res.Code = code.CodeTypeOK
@@ -70,56 +78,51 @@ func (app *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.R
 }
 
 // CheckTx validate data format before putting in mempool
-func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) types.ResponseCheckTx {
-	log.Printf("In checkTx: %s\n", string(req.Tx))
+func (app *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.ResponseCheckTx) {
+	defer func() {
+		if r := recover(); r != nil {
+			app.logger.Errorln(r)
+			res.Code = code.CodeTypeUnknownError
+		}
+	}()
+
+	app.logger.Infof("In checkTx: %s\n", string(req.Tx))
 
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
-		log.Println("Error in unmarshal txObj")
-		return types.ResponseCheckTx{
-			Code: code.CodeTypeUnmarshalError,
-			Log:  err.Error()}
+		app.logger.Errorln("Error in unmarshal txObj")
+		res.Code = code.CodeTypeUnmarshalError
+		res.Log = err.Error()
+		return
 	}
-
-	log.Printf("txObj: %+v\n", txObj)
 
 	payload := txObj.Payload
 	pubKey := txObj.PublicKey
 	signature := txObj.Signature
 
 	if payload.Method == "" {
-		log.Println("Empty method")
-		return types.ResponseCheckTx{
-			Code: code.CodeTypeEmptyMethod,
-			Log:  "method cannot be empty"}
+		res.Code = code.CodeTypeEmptyMethod
+		res.Log = "method cannot be emptry"
+		return
 	}
 
 	if _, exists := methodList[payload.Method]; !exists {
-		log.Printf("Unknown method %s", payload.Method)
-		return types.ResponseCheckTx{
-			Code: code.CodeTypeInvalidMethod,
-			Log:  fmt.Sprintf("unknown for method %s", payload.Method)}
+		res.Code = code.CodeTypeInvalidMethod
+		res.Log = fmt.Sprintf("unknown method: %s", payload.Method)
+		return
 	}
-	/*
-		payloadBytes, err := json.Marshal(payload)
-		if err != nil {
-			log.Printf("Error in marshal payload: %+v\n", payload)
-			return types.ResponseCheckTx{
-				Code: code.CodeTypeEncodingError,
-				Log:  "error with payload unmarshal"}
-		}
-	*/
-	log.Printf("pubkey: 0x%x\nparams: %s\nsignature: 0x%x\n", pubKey, payload.Params, signature)
+
+	app.logger.Infof("pubkey: 0x%x\nparams: %s\nsignature: 0x%x\n", pubKey, payload.Params, signature)
 
 	if !ed25519.Verify(pubKey, payload.Params, signature) {
-		log.Printf("Failed in signature verification\n")
-		return types.ResponseCheckTx{
-			Code: code.CodeTypeUnauthorized,
-			Log:  "failed in signature verification",
-		}
+		app.logger.Errorf("Failed in signature verification\n")
+		res.Code = code.CodeTypeUnauthorized
+		res.Log = "failed in signature verification"
+		return
 	}
 
-	return types.ResponseCheckTx{Code: code.CodeTypeOK}
+	res.Code = code.CodeTypeOK
+	return
 }
 
 // Commit commit a current transaction batch
@@ -127,27 +130,29 @@ func (app *SitcomApplication) Commit() (res types.ResponseCommit) {
 	appHash := make([]byte, 8)
 	binary.LittleEndian.PutUint64(appHash, app.state.Size)
 
-	app.state.AppHash = appHash
-
 	app.state.Height++
+	app.state.AppHash = appHash
 	app.state.SaveState()
-	// app.state.currentBatch.Commit()
-
-	res.Data = appHash
 
 	return
 }
 
 // Query return data from blockchain
 func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQuery) {
-	log.Printf("In query: %s\n", string(req.Data))
+	defer func() {
+		if r := recover(); r != nil {
+			app.logger.Errorln(r)
+			res.Code = code.CodeTypeUnknownError
+		}
+	}()
+
+	app.logger.Infof("In query: %s\n", string(req.Data))
 
 	if len(req.Data) == 0 {
 		itr := app.state.db.Iterator(nil, nil)
 		for ; itr.Valid(); itr.Next() {
-			log.Printf("k: %s, v: %s\n", itr.Key(), itr.Value())
+			app.logger.Printf("k: %s, v: %s\n", itr.Key(), itr.Value())
 		}
-
 		return
 	}
 
@@ -190,16 +195,30 @@ func (app *SitcomApplication) Query(req types.RequestQuery) (res types.ResponseQ
 
 // InitChain is used for initialize a blockchain
 func (app *SitcomApplication) InitChain(req types.RequestInitChain) types.ResponseInitChain {
+	for _, v := range req.Validators {
+		r := app.updateValidator(v)
+		if r.IsErr() {
+			app.logger.Errorf("Error updating validators: %v", r)
+		}
+	}
 	return types.ResponseInitChain{}
 }
 
 // BeginBlock create new transaction batch
 func (app *SitcomApplication) BeginBlock(req types.RequestBeginBlock) types.ResponseBeginBlock {
-	// app.state.currentBatch = app.state.db.NewTransaction(true)
+	app.logger.Infof("BeginBlock: %d, ChainID: %s", req.Header.Height, req.Header.ChainID)
+	app.state.Height = req.Header.Height
+	app.CurrentChain = req.Header.ChainID
+	app.valUpdates = make(map[string]types.ValidatorUpdate, 0)
 	return types.ResponseBeginBlock{}
 }
 
 // EndBlock is called when ending block
 func (app *SitcomApplication) EndBlock(req types.RequestEndBlock) types.ResponseEndBlock {
-	return types.ResponseEndBlock{}
+	app.logger.Infof("EndBlock: %d", req.Height)
+	valUpdates := make([]types.ValidatorUpdate, 0)
+	for _, v := range app.valUpdates {
+		valUpdates = append(valUpdates, v)
+	}
+	return types.ResponseEndBlock{ValidatorUpdates: valUpdates}
 }

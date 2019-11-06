@@ -4,9 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	// "os/signal"
-	// "syscall"
 
+	"github.com/sirupsen/logrus"
 	abciserver "github.com/tendermint/tendermint/abci/server"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
@@ -21,11 +20,12 @@ func init() {
 }
 
 func main() {
-	app := sitcomapp.NewSitcomApp("data")
+	logger := logrus.New()
+	app := sitcomapp.NewSitcomApp("data", logrus.NewEntry(logger))
 
 	flag.Parse()
 
-	logger := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
+	loggerTm := log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 	// server := abciserver.NewSocketServer(socketAddr, app)
 	server, err := abciserver.NewServer(socketAddr, "socket", app)
@@ -33,7 +33,7 @@ func main() {
 		panic(err)
 	}
 
-	server.SetLogger(logger)
+	server.SetLogger(loggerTm)
 	if err := server.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "error starting socket server: %v", err)
 		os.Exit(1)
@@ -46,7 +46,7 @@ func main() {
 		os.Exit(0)
 	*/
 
-	cmn.TrapSignal(logger, func() {
+	cmn.TrapSignal(loggerTm, func() {
 		server.Stop()
 	})
 
