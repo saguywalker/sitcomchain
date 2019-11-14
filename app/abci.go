@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 
@@ -20,6 +21,63 @@ func (a *SitcomApplication) Info(req types.RequestInfo) (res types.ResponseInfo)
 	res.LastBlockHeight = a.state.Height
 	res.LastBlockAppHash = a.state.AppHash
 	return res
+}
+
+// CheckTx validate data format before putting in mempool
+func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.ResponseCheckTx) {
+	defer func() {
+		if r := recover(); r != nil {
+			a.logger.Errorln(r)
+			res.Code = code.CodeTypeUnknownError
+		}
+	}()
+
+	a.logger.Infof("In checkTx: %s\n", string(req.Tx))
+
+	var txObj protoTm.Tx
+	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
+		a.logger.Errorln("Error in unmarshal txObj")
+		res.Code = code.CodeTypeUnmarshalError
+		res.Log = err.Error()
+		return
+	}
+
+	payload := txObj.Payload
+	signature := txObj.Signature
+
+	if payload.Method == "" {
+		res.Code = code.CodeTypeEmptyMethod
+		res.Log = "method cannot be emptry"
+		return
+	}
+
+	if _, exists := methodList[payload.Method]; !exists {
+		res.Code = code.CodeTypeInvalidMethod
+		res.Log = fmt.Sprintf("unknown method: %s", payload.Method)
+		return
+	}
+
+	if payload.Method == "GiveBadge" || payload.Method == "ApproveActivity" {
+		publicKey := a.state.db.Get([]byte("sitcompetence"))
+		if publicKey == nil {
+			res.Code = code.CodeTypeUnauthorized
+			res.Log = "sitcompetence publickey not found"
+			return
+		}
+
+		hashed := sha256.Sum256(payload.Params)
+
+		if !ed25519.Verify(publicKey, hashed[:], signature) {
+			a.logger.Errorf("Failed in signature verification\n")
+			res.Code = code.CodeTypeUnauthorized
+			res.Log = "failed in signature verification"
+			return
+		}
+
+	}
+
+	res.Code = code.CodeTypeOK
+	return
 }
 
 // DeliverTx update new data
@@ -62,54 +120,6 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 	}
 
 	return res
-}
-
-// CheckTx validate data format before putting in mempool
-func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.ResponseCheckTx) {
-	defer func() {
-		if r := recover(); r != nil {
-			a.logger.Errorln(r)
-			res.Code = code.CodeTypeUnknownError
-		}
-	}()
-
-	a.logger.Infof("In checkTx: %s\n", string(req.Tx))
-
-	var txObj protoTm.Tx
-	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
-		a.logger.Errorln("Error in unmarshal txObj")
-		res.Code = code.CodeTypeUnmarshalError
-		res.Log = err.Error()
-		return
-	}
-
-	payload := txObj.Payload
-	pubKey := txObj.PublicKey
-	signature := txObj.Signature
-
-	if payload.Method == "" {
-		res.Code = code.CodeTypeEmptyMethod
-		res.Log = "method cannot be emptry"
-		return
-	}
-
-	if _, exists := methodList[payload.Method]; !exists {
-		res.Code = code.CodeTypeInvalidMethod
-		res.Log = fmt.Sprintf("unknown method: %s", payload.Method)
-		return
-	}
-
-	a.logger.Infof("pubkey: 0x%x\nparams: %s\nsignature: 0x%x\n", pubKey, payload.Params, signature)
-
-	if !ed25519.Verify(pubKey, payload.Params, signature) {
-		a.logger.Errorf("Failed in signature verification\n")
-		res.Code = code.CodeTypeUnauthorized
-		res.Log = "failed in signature verification"
-		return
-	}
-
-	res.Code = code.CodeTypeOK
-	return
 }
 
 // Commit commit a current transaction batch

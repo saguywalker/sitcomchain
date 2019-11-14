@@ -7,6 +7,10 @@ import (
 	"github.com/tendermint/tendermint/abci/types"
 )
 
+func (a *SitcomApplication) addNewService(payload []byte) (res types.ResponseDeliverTx, err error) {
+	return
+}
+
 func (a *SitcomApplication) giveBadge(payload []byte) (res types.ResponseDeliverTx, err error) {
 	var sorted map[string]interface{}
 	if err := json.Unmarshal(payload, &sorted); err != nil {
