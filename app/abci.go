@@ -114,6 +114,11 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 		if err != nil {
 			return
 		}
+	case "AddNewService":
+		res, err = a.addNewService(string(payload.Params))
+		if err != nil {
+			return
+		}
 	default:
 		res.Log = fmt.Sprintf("unknown method %s", payload.Method)
 		res.Code = code.CodeTypeInvalidMethod
