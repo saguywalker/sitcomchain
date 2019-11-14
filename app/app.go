@@ -24,8 +24,10 @@ type SitcomApplication struct {
 var (
 	_          types.Application = (*SitcomApplication)(nil)
 	methodList                   = map[string]bool{
-		"SetValidator": true,
-		"GiveBadge":    true,
+		"SetValidator":    true,
+		"AddNewService":   true,
+		"GiveBadge":       true,
+		"ApproveActivity": true,
 	}
 )
 
