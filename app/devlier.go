@@ -47,7 +47,6 @@ func (a *SitcomApplication) giveBadge(payload []byte) (res types.ResponseDeliver
 	res.Code = code.CodeTypeOK
 	res.Log = "success"
 	a.logger.Infoln(res.Log)
-
 	return res, nil
 }
 

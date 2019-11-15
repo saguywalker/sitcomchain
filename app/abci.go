@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 
@@ -60,10 +61,18 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 	}
 
 	if payload.Method == "GiveBadge" || payload.Method == "ApproveActivity" {
-		publicKey := a.state.db.Get([]byte("sitcompetence"))
-		if publicKey == nil {
+		b64PubKey := a.state.db.Get([]byte("sitcompetence"))
+		if b64PubKey == nil {
 			res.Code = code.CodeTypeUnauthorized
 			res.Log = "sitcompetence publickey not found"
+			a.logger.Infoln(res.Log)
+			return
+		}
+
+		publicKey, err := base64.StdEncoding.DecodeString([]byte(b64PubKey))
+		if err != nil {
+			res.Code = code.CodeTypeDecodingError
+			res.Log = "decoding error"
 			a.logger.Infoln(res.Log)
 			return
 		}
@@ -98,6 +107,7 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 
 	var txObj protoTm.Tx
 	if err := proto.Unmarshal(req.Tx, &txObj); err != nil {
+		a.logger.Infoln(err.Error())
 		return types.ResponseDeliverTx{
 			Code: code.CodeTypeUnmarshalError,
 			Log:  err.Error()}
