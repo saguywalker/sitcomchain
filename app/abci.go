@@ -46,12 +46,14 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 	signature := txObj.Signature
 
 	if payload.Method == "" {
+		a.logger.Infoln("method cannot be empty")
 		res.Code = code.CodeTypeEmptyMethod
 		res.Log = "method cannot be emptry"
 		return
 	}
 
 	if _, exists := methodList[payload.Method]; !exists {
+		a.logger.Infoln("invalid method")
 		res.Code = code.CodeTypeInvalidMethod
 		res.Log = fmt.Sprintf("unknown method: %s", payload.Method)
 		return
@@ -60,9 +62,9 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 	if payload.Method == "GiveBadge" || payload.Method == "ApproveActivity" {
 		publicKey := a.state.db.Get([]byte("sitcompetence"))
 		if publicKey == nil {
-			a.logger.Infoln(res.Log)
 			res.Code = code.CodeTypeUnauthorized
 			res.Log = "sitcompetence publickey not found"
+			a.logger.Infoln(res.Log)
 			return
 		}
 
