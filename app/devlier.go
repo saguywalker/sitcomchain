@@ -1,22 +1,22 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
-	"strings"
 
 	"github.com/saguywalker/sitcomchain/code"
 	"github.com/tendermint/tendermint/abci/types"
 )
 
-func (a *SitcomApplication) addNewService(payload string) (res types.ResponseDeliverTx, err error) {
-	parts := strings.Split(payload, "=")
+func (a *SitcomApplication) addNewService(payload []byte) (res types.ResponseDeliverTx, err error) {
+	parts := bytes.Split(payload, []byte("="))
 	if len(parts) != 2 {
 		res.Code = code.CodeTypeInvalidMethod
 		res.Log = "invalid payload format"
 		return
 	}
 
-	a.state.db.Set([]byte(parts[0]), []byte(parts[1]))
+	a.state.db.Set(parts[0], parts[1])
 	res.Code = code.CodeTypeOK
 	return res, nil
 }

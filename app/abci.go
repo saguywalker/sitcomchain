@@ -60,11 +60,13 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 	if payload.Method == "GiveBadge" || payload.Method == "ApproveActivity" {
 		publicKey := a.state.db.Get([]byte("sitcompetence"))
 		if publicKey == nil {
+			a.logger.Infoln(res.Log)
 			res.Code = code.CodeTypeUnauthorized
 			res.Log = "sitcompetence publickey not found"
 			return
 		}
 
+		a.logger.Infof("params: %x", string(payload.Params))
 		hashed := sha256.Sum256(payload.Params)
 
 		if !ed25519.Verify(publicKey, hashed[:], signature) {
@@ -77,6 +79,7 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 	}
 
 	res.Code = code.CodeTypeOK
+	a.logger.Infoln("completed checkTx.")
 	return
 }
 
@@ -115,7 +118,7 @@ func (a *SitcomApplication) DeliverTx(req types.RequestDeliverTx) (res types.Res
 			return
 		}
 	case "AddNewService":
-		res, err = a.addNewService(string(payload.Params))
+		res, err = a.addNewService(payload.Params)
 		if err != nil {
 			return
 		}
