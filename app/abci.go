@@ -69,7 +69,7 @@ func (a *SitcomApplication) CheckTx(req types.RequestCheckTx) (res types.Respons
 			return
 		}
 
-		publicKey, err := base64.StdEncoding.DecodeString([]byte(b64PubKey))
+		publicKey, err := base64.StdEncoding.DecodeString(string(b64PubKey))
 		if err != nil {
 			res.Code = code.CodeTypeDecodingError
 			res.Log = "decoding error"
