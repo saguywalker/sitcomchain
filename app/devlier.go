@@ -9,10 +9,11 @@ import (
 )
 
 func (a *SitcomApplication) addNewService(payload []byte) (res types.ResponseDeliverTx, err error) {
-	parts := bytes.Split(payload, []byte("="))
+	parts := bytes.Split(payload, []byte(":"))
 	if len(parts) != 2 {
 		res.Code = code.CodeTypeInvalidMethod
 		res.Log = "invalid payload format"
+		a.logger.Infoln(res.Log)
 		return
 	}
 
@@ -25,7 +26,8 @@ func (a *SitcomApplication) giveBadge(payload []byte) (res types.ResponseDeliver
 	var sorted map[string]interface{}
 	if err := json.Unmarshal(payload, &sorted); err != nil {
 		res.Code = code.CodeTypeUnmarshalError
-		res.Log = "error when unmarshal params"
+		res.Log = "error when unmarshaling params"
+		a.logger.Infoln(res.Log)
 		return res, err
 	}
 
@@ -35,6 +37,7 @@ func (a *SitcomApplication) giveBadge(payload []byte) (res types.ResponseDeliver
 	if err != nil {
 		res.Code = code.CodeTypeEncodingError
 		res.Log = "error when marshal badgeKey"
+		a.logger.Infoln(res.Log)
 		return res, err
 	}
 
@@ -43,6 +46,7 @@ func (a *SitcomApplication) giveBadge(payload []byte) (res types.ResponseDeliver
 	a.state.Size++
 	res.Code = code.CodeTypeOK
 	res.Log = "success"
+	a.logger.Infoln(res.Log)
 
 	return res, nil
 }
@@ -52,6 +56,7 @@ func (a *SitcomApplication) approveActivity(payload []byte) (res types.ResponseD
 	if err := json.Unmarshal(payload, &sorted); err != nil {
 		res.Code = code.CodeTypeUnmarshalError
 		res.Log = "error when unmarshal params"
+		a.logger.Infoln(res.Log)
 		return res, err
 	}
 
@@ -61,6 +66,7 @@ func (a *SitcomApplication) approveActivity(payload []byte) (res types.ResponseD
 	if err != nil {
 		res.Code = code.CodeTypeEncodingError
 		res.Log = "error when marshal badgeKey"
+		a.logger.Infoln(res.Log)
 		return res, err
 	}
 
@@ -69,6 +75,7 @@ func (a *SitcomApplication) approveActivity(payload []byte) (res types.ResponseD
 	a.state.Size++
 	res.Code = code.CodeTypeOK
 	res.Log = "success"
+	a.logger.Infoln(res.Log)
 
 	return res, nil
 }
