@@ -5,16 +5,16 @@ Blockchain's part of a SIT-Competence using tendermint.
 0. Install required dependencies
     ```bash
     sudo apt-get update
-    sudo apt install build-essential && make
+    sudo apt install build-essential
     ```
 
 1. Install Go and Setup GOPATH
     ```bash
     ### For Ubuntu and Debian distros
     # Install Go
-    wget https://dl.google.com/go/go1.13.5.darwin-amd64.tar.gz
+    wget https://dl.google.com/go/go1.13.5.linux-amd64.tar.gz
     mkdir -p /usr/local
-    tar xvf go1.13.5.darwin-amd64.tar.gz
+    tar xvf go1.13.5.linux-amd64.tar.gz
     sudo mv go /usr/local
     
     # Setup Go environment variables
