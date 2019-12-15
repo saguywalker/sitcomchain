@@ -2,7 +2,7 @@ syntax = "proto3";
 
 message Tx {
     Payload payload = 1;
-    bytes signature = 3;
+    bytes signature = 2;
 }
 
 message Payload {
