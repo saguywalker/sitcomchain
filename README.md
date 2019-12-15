@@ -24,7 +24,7 @@ Blockchain's part of a SIT-Competence using tendermint.
     echo 'export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin' >> ~/.bashrc
     source ~/.bashrc
     ```
- 2. Install Tendermint
+ 2. Install [Tendermint v0.32.7](https://github.com/tendermint/tendermint/releases/tag/v0.32.7)
     ```bash
     ### For Ubuntu and Debian distros
     wget https://github.com/tendermint/tendermint/releases/download/v0.32.7/tendermint_v0.32.7_linux_amd64.zip
