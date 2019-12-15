@@ -5,7 +5,7 @@ Blockchain's part of a SIT-Competence using tendermint.
 0. Install required dependencies
     ```bash
     sudo apt-get update
-    sudo apt install build-essential
+    sudo apt install build-essential unzip
     ```
 
 1. Install Go and Setup GOPATH
@@ -27,12 +27,9 @@ Blockchain's part of a SIT-Competence using tendermint.
  2. Install Tendermint
     ```bash
     ### For Ubuntu and Debian distros
-    mkdir -p $GOPATH/src/github.com/tendermint
-    cd $GOPATH/src/github.com/tendermint
-    git clone https://github.com/tendermint/tendermint.git
-    cd tendermint
-    make tools
-    make install
+    wget https://github.com/tendermint/tendermint/releases/download/v0.32.7/tendermint_v0.32.7_linux_amd64.zip
+    unzip tendermint_v0.32.7_linux_amd64.zip -d ~/tendermint
+    echo 'export PATH=$PATH:$HOME/tendermint' >> ~/.bashrc
     ```
 
 ## Usage
