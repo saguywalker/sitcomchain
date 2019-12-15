@@ -57,5 +57,6 @@ Blockchain's part of a SIT-Competence using tendermint.
 5. Open another tab to run a SITCOMCHAIN smart-contract
     ```bash
     cd $GOPATH/src/github/com/saguywalker/sitcomchain
+    go build
     ./sitcomchain
     ```
